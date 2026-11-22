@@ -58,7 +58,7 @@ the settings, the reader's state machine, the camera handoff and the update logi
 - absolute temperature accuracy (a room near 20 °C read 26-28 °C).
 
 **Possible next step:** a 1/4-20 tripod adapter with a flex board that reroutes the USB connector.
-Mechanical notes are in `docs/TC001MAX_MECHANICAL.md`; the CAD files will live elsewhere.
+Mechanical notes and CAD files are in [TC001-Max-Mounting](https://github.com/MMImodular/TC001-Max-Mounting).
 
 ## Sources and attribution
 
@@ -222,6 +222,6 @@ The log is `C:\ProgramData\TC001MaxWebcam\webcam.log`.
 | `src/TC001MaxWebcam/` | `TC001MaxWebcam.exe`: `install`, `uninstall`, `status`, `run`, `settings`, `update`. |
 | `installer/` | The WiX v5 `.msi` package. |
 | `tests/` | The console self-test, and real camera captures used as fixtures. |
-| `docs/` | `PROTOCOL.md` (the USB protocol, with sources), `STATE_OF_THE_ART.md`, `TC001MAX_MECHANICAL.md`. |
+| `docs/` | `PROTOCOL.md` (the USB protocol, with sources), `STATE_OF_THE_ART.md`. |
 | `experiments/` | The Python experiments behind the auto-shutter and stall findings, with their logs. Not shipped. |
 | `build.ps1`, `install.ps1`, `uninstall.ps1` | The build script, and the scripted install and uninstall. |
