@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TC001 Max Thermal Webcam: Windows Installer package (WiX v5). The same steps as install.ps1, done by
+  Windows Installer with one UAC prompt, and undone by Settings > Apps > Installed apps (or msiexec /x):
+
+   1. Files -> C:\Program Files\TC001MaxWebcam\ (bin\publish, the README and the notices), and that
+      folder on the system PATH so "TC001MaxWebcam settings set ..." works in any new terminal.
+   2. C:\ProgramData\TC001MaxWebcam\ (no inheritance): SYSTEM, Administrators full control; Users
+      Modify (to edit settings.json; install.ps1 grants only its owner, but Windows Installer does
+      not fill [UserSID] into an SDDL, so the .msi cannot name you); LOCAL SERVICE (the Frame
+      Server) read + create files in the folder; CREATOR OWNER Modify on files (the camera's
+      webcam.log). settings.json is not created: missing means the defaults.
+   3. C:\ProgramData\TC001MaxWebcam\claims\: the camera claims shared with labbench
+      (src\TC001MaxWebcam.Source\Core\CameraClaims.cs). Users and LOCAL SERVICE read + create files;
+      CREATOR OWNER Modify on files, so every process can change and delete only its own claim.
+   4. The media source COM class in HKLM (what regsvr32 TC001MaxWebcamSource.comhost.dll writes:
+      .NET comhost's RegisterClsid, a default value, InprocServer32 = the DLL, ThreadingModel Both),
+      written by Windows Installer itself so that uninstall and rollback remove it.
+   5. The virtual camera: "TC001MaxWebcam.exe install" (MFCreateVirtualCamera, system lifetime, all
+      users), run as LocalSystem after the files and registry are in place; its output goes to the
+      Windows Installer log. Uninstall runs "TC001MaxWebcam.exe uninstall" first.
+   6. Updates: HKLM\SOFTWARE\TC001MaxWebcam InstalledFrom = the path of the .msi that installed this
+      version (OriginalDatabase), so that "TC001MaxWebcam update" (the Start-menu "Update" shortcut)
+      looks for newer builds in the same folder (src\TC001MaxWebcam\Updater.cs). A newer .msi is a
+      major upgrade: settings, the data folder and the virtual camera stay.
+  Checked before anything changes: 64-bit Windows and the .NET 10 x64 runtime (Microsoft.NETCore.App
+  10.x in C:\Program Files\dotnet; the media source is loaded into a Windows service, so a per-user
+  runtime does not work). Not done here: the WinUSB driver for the camera (Zadig, README Step 1).
+
+  Uninstall keeps settings.json (and so the data folder) for a later install; it removes the log,
+  the claims and everything else.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <Package Name="TC001 Max Thermal Webcam"
+           Manufacturer="TC001 Max Thermal Webcam"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="811A58FA-9195-44F7-8D75-1161873DB4A1"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="TC001 Max Thermal Webcam: the TOPDON TC001 Max as a Windows 11 virtual camera" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPCOMMENTS" Value="Shows the TOPDON TC001 Max thermal camera as an ordinary webcam. Settings: TC001MaxWebcam settings." />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- preconditions ===================================================================== -->
+    <Launch Condition="VersionNT64" Message="[ProductName] needs 64-bit Windows 11." />
+    <netfx:DotNetCompatibilityCheck Property="DOTNET10_X64" RuntimeType="core" Platform="x64"
+                                    Version="10.0.0" RollForward="latestMinor" />
+    <Launch Condition="Installed OR DOTNET10_X64 = &quot;0&quot;"
+            Message="[ProductName] needs the .NET 10 runtime (x64), installed for all users in C:\Program Files\dotnet. Install it with:  winget install Microsoft.DotNet.Runtime.10  (or from https://dotnet.microsoft.com/download/dotnet/10.0), then run this installer again." />
+
+    <!-- folders =========================================================================== -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="TC001MaxWebcam" />
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIR" Name="TC001MaxWebcam">
+        <Directory Id="CLAIMDIR" Name="claims" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="MenuDir" Name="TC001 Max Thermal Webcam" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="TC001 Max Thermal Webcam" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="ProgramFiles" />
+      <ComponentGroupRef Id="DataFolders" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+
+    <!-- 5. the virtual camera ============================================================== -->
+    <!-- WixQuietExec: no window, and the command's output lands in the Windows Installer log -->
+    <SetProperty Id="CreateVirtualCamera" Value="&quot;[#TC001MaxWebcam.exe]&quot; install" Before="CreateVirtualCamera" Sequence="execute" />
+    <CustomAction Id="CreateVirtualCamera" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="no" Return="check" />
+    <SetProperty Id="CreateVirtualCamera_Rollback" Value="&quot;[#TC001MaxWebcam.exe]&quot; uninstall" Before="CreateVirtualCamera_Rollback" Sequence="execute" />
+    <CustomAction Id="CreateVirtualCamera_Rollback" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec64"
+                  Execute="rollback" Impersonate="no" Return="ignore" />
+    <SetProperty Id="RemoveVirtualCamera" Value="&quot;[#TC001MaxWebcam.exe]&quot; uninstall" Before="RemoveVirtualCamera" Sequence="execute" />
+    <CustomAction Id="RemoveVirtualCamera" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <!-- a major upgrade keeps the camera (the new version's install re-creates it anyway) -->
+      <Custom Action="RemoveVirtualCamera" Before="RemoveRegistryValues"
+              Condition="REMOVE ~= &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="CreateVirtualCamera_Rollback" Before="CreateVirtualCamera" Condition="NOT REMOVE" />
+      <Custom Action="CreateVirtualCamera" Before="InstallFinalize" Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
+
+    <!-- UI: welcome, ready, progress, finish (no licence page: none has been chosen yet) ===== -->
+    <UIRef Id="TC001MaxWebcamUI" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
+              Value="Open the Camera app (or Teams, Zoom, OBS) and pick 'TC001 Max Thermal Webcam'. If the picture says 'No thermal camera ... no WinUSB driver', bind WinUSB to the camera once with Zadig (README, Step 1). labbench takes the camera when it needs it and gives it back. Settings: TC001MaxWebcam settings (in a new terminal)." />
+  </Package>
+
+  <!-- 1. program files ==================================================================== -->
+  <Fragment>
+    <ComponentGroup Id="ProgramFiles" Directory="INSTALLFOLDER">
+      <!-- 4. the media source COM server, registered like regsvr32 would (HKLM only) -->
+      <Component Id="MediaSource" Bitness="always64">
+        <File Id="TC001MaxWebcamSource.comhost.dll" Source="$(var.PublishDir)TC001MaxWebcamSource.comhost.dll" KeyPath="yes" />
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\CLSID\{c81b40c5-3cf7-4733-b7cc-a000f86da438}">
+          <RegistryValue Type="string" Value="CoreCLR COMHost Server" />
+          <RegistryKey Key="InprocServer32">
+            <RegistryValue Type="string" Value="[#TC001MaxWebcamSource.comhost.dll]" />
+            <RegistryValue Name="ThreadingModel" Type="string" Value="Both" />
+          </RegistryKey>
+        </RegistryKey>
+      </Component>
+      <Component Id="Tool" Bitness="always64">
+        <File Id="TC001MaxWebcam.exe" Source="$(var.PublishDir)TC001MaxWebcam.exe" KeyPath="yes" />
+        <Environment Id="SystemPath" Name="PATH" Value="[INSTALLFOLDER]" Part="last" Action="set" System="yes" Permanent="no" />
+        <!-- 6. where this version came from, for "TC001MaxWebcam update" -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\TC001MaxWebcam">
+          <RegistryValue Name="InstalledFrom" Type="string" Value="[OriginalDatabase]" />
+          <RegistryValue Name="Version" Type="string" Value="[ProductVersion]" />
+        </RegistryKey>
+      </Component>
+      <Component Id="Docs" Bitness="always64">
+        <File Id="README.md" Source="$(var.RepoDir)README.md" KeyPath="yes" />
+      </Component>
+      <!-- everything else that build.ps1 published (the media source assembly, DirectNCore, runtime
+           configs, THIRD_PARTY_NOTICES.txt) -->
+      <Files Include="$(var.PublishDir)**">
+        <Exclude Files="$(var.PublishDir)TC001MaxWebcamSource.comhost.dll" />
+        <Exclude Files="$(var.PublishDir)TC001MaxWebcam.exe" />
+        <Exclude Files="$(var.PublishDir)**\*.pdb" />
+      </Files>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- 2. + 3. data folders ================================================================ -->
+  <!-- SDDL rights: FA full; 0x1301bf Modify; 0x1200a9 Read & execute; 0x2 create files (on a folder,
+       no inheritance flags = the folder itself). SY SYSTEM, BA Administrators, BU Users, LS LOCAL
+       SERVICE, CO CREATOR OWNER. P = no inheritance from C:\ProgramData. -->
+  <Fragment>
+    <ComponentGroup Id="DataFolders">
+      <Component Id="DataFolder" Directory="DATADIR" Guid="236656FE-8380-49FD-B64E-FF7CF739CB8F" Bitness="always64">
+        <CreateFolder>
+          <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;BU)(A;OICI;0x1200a9;;;LS)(A;;0x2;;;LS)(A;OIIO;0x1301bf;;;CO)" />
+        </CreateFolder>
+        <RemoveFile Id="RemoveLog" Name="webcam.log*" On="uninstall" />
+        <RemoveFile Id="RemoveSettingsTmp" Name="settings.json.tmp" On="uninstall" />
+      </Component>
+      <Component Id="ClaimFolder" Directory="CLAIMDIR" Guid="3D6B14DE-DB6D-44E8-873E-007F008D4A7C" Bitness="always64">
+        <CreateFolder>
+          <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)(A;;0x2;;;BU)(A;OICI;0x1200a9;;;LS)(A;;0x2;;;LS)(A;OIIO;0x1301bf;;;CO)" />
+        </CreateFolder>
+        <RemoveFile Id="RemoveClaims" Name="claim-*" On="uninstall" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- start menu ========================================================================== -->
+  <Fragment>
+    <Component Id="StartMenu" Directory="MenuDir" Guid="8CFBC997-C9A9-4372-8349-0BCAB73D93B3">
+      <Shortcut Id="StatusShortcut" Name="TC001 Max Thermal Webcam status"
+                Description="Installation, settings, camera claims, log and USB device (read-only; the camera is not opened)"
+                Target="[System64Folder]cmd.exe"
+                Arguments="/k &quot;&quot;[INSTALLFOLDER]TC001MaxWebcam.exe&quot; status &amp; echo. &amp; &quot;[INSTALLFOLDER]TC001MaxWebcam.exe&quot; help&quot;"
+                WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="UpdateShortcut" Name="Update TC001 Max Thermal Webcam"
+                Description="Install a newer build from the folder this one was installed from (one administrator prompt; waits until no app uses the webcam)"
+                Target="[INSTALLFOLDER]TC001MaxWebcam.exe"
+                Arguments="update --pause"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveMenuDir" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\TC001MaxWebcam" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+
+  <!-- the dialog set: WixUI_Minimal without its licence page ============================== -->
+  <Fragment>
+    <UI Id="TC001MaxWebcamUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Condition="NOT Installed" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Condition="Installed AND PATCH" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="1" Condition="NOT Installed OR PATCH" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2" Condition="Installed AND NOT PATCH" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+    </UI>
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>

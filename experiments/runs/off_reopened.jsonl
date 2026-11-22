@@ -1,0 +1,7 @@
+{"label": "reads", "start": "2026-11-20 20:21:37", "seconds": 200.0}
+{"t": 0.0, "wall": "20:21:37", "kind": "debuglog", "text": "[2580204] I/std cmd: std : 1 2f 81\r\n\r\n\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 138.141, "wall": "20:23:55", "kind": "jump", "mad": 30.72, "base": 1.74, "std": 427.1, "median_c": 26.48}
+{"t": 138.172, "wall": "20:23:55", "kind": "jump", "mad": 30.68, "base": 1.74, "std": 17.6, "median_c": 26.54}
+{"t": 172.063, "wall": "20:24:29", "kind": "jump", "mad": 4.32, "base": 0.39, "std": 17.6, "median_c": 26.48}
+{"t": 172.094, "wall": "20:24:29", "kind": "jump", "mad": 4.32, "base": 0.39, "std": 17.7, "median_c": 26.54}
+{"label": "reads", "summary": true, "seconds": 200.0, "frames": 4999, "fps": 25.0, "stalls": [], "gaps": [], "shutter_log": [], "frozen": [], "jumps": [138.141, 138.172, 172.063, 172.094], "median_c_range": [26.48, 26.6]}

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	Self-test of the media source's pure code (src\TC001MaxWebcam.Source\Core): the TC001 Max
+	protocol on real camera bytes, the picture, the settings, the reader's state machine and the
+	engine with a fake USB link and a fake clock. No hardware, no Media Foundation, no packages.
+	build.ps1 runs it against tests\fixtures and stops on a failure. Not published or installed.
+	-->
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<AssemblyName>TC001MaxWebcamTests</AssemblyName>
+		<RootNamespace>TC001MaxWebcam.Tests</RootNamespace>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<Platforms>x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Include="..\..\src\TC001MaxWebcam.Source\Core\*.cs" LinkBase="Core" />
+	</ItemGroup>
+
+</Project>

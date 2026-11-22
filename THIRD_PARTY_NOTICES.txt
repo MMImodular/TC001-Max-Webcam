@@ -1,0 +1,90 @@
+TC001 Max Thermal Webcam - third-party notices
+==============================================
+
+This project is licensed under the Apache License 2.0 (LICENSE). It contains code adapted from the
+projects below, including code translated into another language (Go or Python to C#); such code
+is attributed here and in each file's header, whose "Origin" / "Adapted from" line says what it
+came from and what changed. "The author's earlier Python driver" is the owner's own, unpublished
+code; it was written from the same public sources, so code ported from it is attributed to them.
+
+Parts of this tool are adapted from VCamNetSample by Simon Mourier
+(https://github.com/smourier/VCamNetSample), a .NET port of VCamSample
+(https://github.com/smourier/VCamSample). Adapted files carry a header naming the original file
+and the changes. NuGet package used at build time and shipped with the binaries: DirectNCore
+(https://github.com/smourier/DirectN, MIT License, Copyright (c) Simon Mourier).
+
+VCamNetSample licence (DirectN uses the same MIT terms, with its own copyright line above):
+
+MIT License
+
+Copyright (c) 2024-2026 Simon Mourier
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+TOPDON TC001 Max protocol (src\TC001MaxWebcam.Source\Core\Tc001MaxProtocol.cs,
+CameraSession.cs): ported (via the author's earlier Python driver) from published sources.
+The TC001 Max block finder (BlockParser) is adapted from WendyOS PR #2621
+(https://github.com/wendylabsinc/WendyOS/pull/2621, go/internal/agent/usbthermal/parser.go,
+Copyright Wendy Labs, Apache License 2.0): translated from Go and modified (no header/phase
+counting; first-block skip, 600 degC ceiling, histogram median and picture-leak repair added).
+The command layout and start sequence are from
+jvdillon/p3-ir-camera (https://github.com/jvdillon/p3-ir-camera, Copyright jvdillon and
+contributors, Apache License 2.0). Licence text: https://www.apache.org/licenses/LICENSE-2.0
+(docs\PROTOCOL.md lists every source). The VDCMD command builder and the auto-shutter (auto-FFC)
+command ids are adapted from xaionaro-go/thermalmaster (https://github.com/xaionaro-go/thermalmaster,
+pkg/thermalmaster/command.go, command_ffc.go, shutter.go), released under CC0-1.0 (no
+attribution required; given anyway).
+
+Origin of the code
+------------------
+src\TC001MaxWebcam.Source\Activator.cs, MediaSource.cs, MediaStream.cs, GlobalSuppressions.cs,
+  Utilities\*.cs, Properties\AssemblyInfo.cs: adapted from VCamNetSample (MIT); changes listed
+  in each header.
+src\TC001MaxWebcam.Source\Shared.cs, FrameSource.cs, src\TC001MaxWebcam\Program.cs: this
+  project's code, following VCamNetSample's structure and calls (MIT).
+src\TC001MaxWebcam.Source\Core\Tc001MaxProtocol.cs: adapted (via the author's Python driver)
+  from WendyOS PR #2621 (Apache-2.0; the block finder is a translation of parser.go, modified:
+  no header/phase counting; first-block skip, 600 degC ceiling, histogram median and picture-leak
+  repair added), jvdillon/p3-ir-camera (Apache-2.0; command layout, CRC test vectors, register
+  reads) and xaionaro-go/thermalmaster (CC0-1.0; VDCMD builder, auto-FFC ids).
+src\TC001MaxWebcam.Source\Core\CameraSession.cs: start and stop sequences adapted from WendyOS
+  protocol.go and p3-ir-camera (Apache-2.0); the rest is this project's own.
+src\TC001MaxWebcam.Source\Core\InfernoLut.cs: data from matplotlib's inferno map (CC0).
+src\TC001MaxWebcam.Source\Usb\WinUsbLink.cs: this project's own, from Microsoft's documentation;
+  it mirrors the behaviour of libusb's WinUSB backend (LGPL-2.1) without its code.
+experiments\cam.py: command bytes from p3-ir-camera (Apache-2.0); crc16_xmodem / vdcmd and the
+  auto-FFC ids adapted from thermalmaster (CC0-1.0); imports the author's private BlockParser
+  (adapted from WendyOS parser.go, Apache-2.0).
+All other files (Core\CameraClaims.cs, Display.cs, FrameRenderer.cs, Log.cs, Palettes.cs,
+  PixelFont.cs, Settings.cs, UpdateRules.cs, WebcamEngine.cs, src\TC001MaxWebcam\Updater.cs, the
+  installer, scripts, tests, experiments\stalls and run_*.py): written for this project.
+  Display.cs ports the author's own unpublished Python code.
+All of the code in this repository, including what is adapted above, was written by Claude
+(Anthropic's AI model) in Claude Code, directed and reviewed by the repository owner.
+
+Colour map (src\TC001MaxWebcam.Source\Core\InfernoLut.cs): the "inferno" map from matplotlib, by
+Nathaniel J. Smith, Stefan van der Walt and Eric Firing, released under CC0 (public domain).
+The iron, rainbow and grey palettes are this project's own colour stops.
+
+Installer (installer\, TC001MaxWebcam-*.msi): built with the WiX Toolset
+(https://wixtoolset.org, NuGet packages WixToolset.Sdk, .UI.wixext, .Util.wixext and
+.Netfx.wixext 5.0.2, Copyright .NET Foundation and contributors, Microsoft Reciprocal License
+(MS-RL), https://opensource.org/license/ms-rl-html). WiX is a build tool and is not installed;
+the .msi carries its standard dialogs and the small custom-action DLLs of those extensions
+(WixQuietExec to run TC001MaxWebcam.exe, the .NET runtime check).

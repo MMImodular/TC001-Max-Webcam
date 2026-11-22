@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	The Media Foundation media source behind the "TC001 Max Thermal Webcam" virtual camera.
+	Adapted from VCamNetSample's VCamNetSampleSource project (Copyright (c) 2024-2026 Simon Mourier,
+	MIT License, see ..\..\THIRD_PARTY_NOTICES.txt).
+
+	Framework-dependent COM server (EnableComHosting -> TC001MaxWebcamSource.comhost.dll). The
+	sample's Native AOT variant needs the MSVC linker (Visual Studio C++ tools), so the .NET 10
+	runtime in C:\Program Files\dotnet is loaded into the Frame Server service and the camera apps
+	instead.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<AssemblyName>TC001MaxWebcamSource</AssemblyName>
+		<RootNamespace>TC001MaxWebcam</RootNamespace>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<EnableComHosting>true</EnableComHosting>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<Platforms>x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="DirectNCore" Version="1.18.0" />
+	</ItemGroup>
+
+</Project>

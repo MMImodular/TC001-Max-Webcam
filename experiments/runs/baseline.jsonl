@@ -1,0 +1,18 @@
+{"label": "baseline", "start": "2026-11-20 20:08:51", "seconds": 330.0}
+{"t": 0.0, "wall": "20:08:51", "kind": "debuglog", "text": "[2503672] I/std cmd: std : 1 2f 81\r\n\r\n\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 58.0, "wall": "20:09:49", "kind": "debuglog", "text": "[2509486] I/shutter: shutter close\n\r\nwait cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 58.5, "wall": "20:09:50", "kind": "debuglog", "text": "[2509536] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 75.515, "wall": "20:10:07", "kind": "stall", "clear_s": 0.0}
+{"t": 75.578, "wall": "20:10:07", "kind": "after_stall_meta_diff", "diff": {"64": [10156, 10158], "68": [18720, 18712], "180": [4861, 4863]}, "median_c": 26.6}
+{"t": 118.5, "wall": "20:10:50", "kind": "debuglog", "text": "[2515536] I/ffc_svc: ################wait cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 119.0, "wall": "20:10:50", "kind": "debuglog", "text": "[2515580] I/shutter: shutter open\n\r\n5\n\r\nt cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 119.5, "wall": "20:10:51", "kind": "debuglog", "text": "[2515600] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 133.281, "wall": "20:11:05", "kind": "stall", "clear_s": 0.0}
+{"t": 133.328, "wall": "20:11:05", "kind": "after_stall_meta_diff", "diff": {"64": [11588, 11590], "68": [18692, 18700], "70": [43265, 46337], "71": [13824, 16896], "72": [17408, 18432], "180": [6305, 6307]}, "median_c": 26.73}
+{"t": 179.5, "wall": "20:11:51", "kind": "debuglog", "text": "[2521644] I/shutter: shutter open\n\r\na\n\r\nt cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 180.0, "wall": "20:11:51", "kind": "debuglog", "text": "[2521664] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 240.0, "wall": "20:12:51", "kind": "debuglog", "text": "[2527678] I/shutter: shutter close\n\r\nwait cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 240.5, "wall": "20:12:52", "kind": "debuglog", "text": "[2527728] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 300.5, "wall": "20:13:52", "kind": "debuglog", "text": "[2533742] I/shutter: shutter close\n\r\nwait cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 301.0, "wall": "20:13:52", "kind": "debuglog", "text": "[2533792] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"label": "baseline", "summary": true, "seconds": 330.0, "frames": 8246, "fps": 24.99, "stalls": [75.515, 133.281], "gaps": [], "median_c_range": [26.48, 26.91]}

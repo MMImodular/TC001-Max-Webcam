@@ -1,0 +1,45 @@
+{"label": "pre_manual", "start": "2026-11-20 20:25:13", "seconds": 10}
+{"t": 0.0, "wall": "20:25:13", "kind": "debuglog", "text": "[2601868] I/std cmd: std : 1 2f 81\r\n\r\n\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 3.094, "wall": "20:25:16", "kind": "jump", "mad": 4.28, "base": 0.37, "std": 17.6, "median_c": 26.41}
+{"t": 5.969, "wall": "20:25:19", "kind": "jump", "mad": 4.3, "base": 0.38, "std": 17.6, "median_c": 26.41}
+{"label": "pre_manual", "summary": true, "seconds": 10.0, "frames": 250, "fps": 25.0, "stalls": [], "gaps": [], "shutter_log": [], "frozen": [], "jumps": [3.094, 5.969], "median_c_range": [26.41, 26.48]}
+{"label": "after_manual", "start": "2026-11-20 20:25:24", "seconds": 60.0}
+{"t": 0.0, "wall": "20:25:24", "kind": "debuglog", "text": "[2602956] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 53.094, "wall": "20:26:17", "kind": "stall", "clear_s": 0.0}
+{"t": 53.157, "wall": "20:26:17", "kind": "after_stall_meta_diff", "diff": {"64": [34303, 34305], "68": [18708, 18704], "180": [27996, 27998]}, "median_c": 26.41}
+{"label": "after_manual", "summary": true, "seconds": 60.0, "frames": 1499, "fps": 24.98, "stalls": [53.094], "gaps": [], "shutter_log": [0.0], "frozen": [], "jumps": [], "median_c_range": [26.41, 26.54]}
+{"label": "on", "start": "2026-11-20 20:26:24", "seconds": 150.0}
+{"t": 0.0, "wall": "20:26:24", "kind": "debuglog", "text": "[2608958] I/EXT_CMD: ext : 10 2 81\r\n\r\n\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 0.5, "wall": "20:26:25", "kind": "debuglog", "text": "[2609008] I/shutter: shutter open\n\r\n8\n\r\nt cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 0.812, "wall": "20:26:25", "kind": "frozen", "frames": 15, "since": 0.203}
+{"t": 1.0, "wall": "20:26:25", "kind": "debuglog", "text": "[2609028] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 20.843, "wall": "20:26:45", "kind": "jump", "mad": 5.66, "base": 0.37, "std": 17.7, "median_c": 26.48}
+{"t": 20.89, "wall": "20:26:45", "kind": "jump", "mad": 5.72, "base": 0.37, "std": 17.7, "median_c": 26.41}
+{"t": 26.171, "wall": "20:26:50", "kind": "jump", "mad": 5.73, "base": 0.36, "std": 17.8, "median_c": 26.41}
+{"t": 26.203, "wall": "20:26:50", "kind": "jump", "mad": 5.74, "base": 0.36, "std": 17.7, "median_c": 26.48}
+{"t": 36.046, "wall": "20:27:00", "kind": "jump", "mad": 5.74, "base": 0.37, "std": 17.7, "median_c": 26.48}
+{"t": 38.89, "wall": "20:27:03", "kind": "jump", "mad": 5.76, "base": 0.37, "std": 17.8, "median_c": 26.41}
+{"t": 39.484, "wall": "20:27:04", "kind": "jump", "mad": 5.74, "base": 0.37, "std": 17.7, "median_c": 26.48}
+{"t": 39.531, "wall": "20:27:04", "kind": "jump", "mad": 5.69, "base": 0.37, "std": 17.8, "median_c": 26.41}
+{"t": 55.437, "wall": "20:27:19", "kind": "jump", "mad": 7.36, "base": 0.36, "std": 152.1, "median_c": 26.41}
+{"t": 55.484, "wall": "20:27:20", "kind": "jump", "mad": 8.17, "base": 0.36, "std": 17.8, "median_c": 26.48}
+{"t": 59.718, "wall": "20:27:24", "kind": "jump", "mad": 5.67, "base": 0.36, "std": 17.7, "median_c": 26.48}
+{"t": 60.687, "wall": "20:27:25", "kind": "jump", "mad": 5.67, "base": 0.36, "std": 17.8, "median_c": 26.48}
+{"t": 60.718, "wall": "20:27:25", "kind": "jump", "mad": 5.75, "base": 0.36, "std": 17.8, "median_c": 26.41}
+{"t": 61.0, "wall": "20:27:25", "kind": "debuglog", "text": "[2615058] I/isp: b average value 5064\n\r\nt cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 61.406, "wall": "20:27:25", "kind": "frozen", "frames": 15, "since": 60.812}
+{"t": 61.406, "wall": "20:27:25", "kind": "jump", "mad": 11.21, "base": 0.36, "std": 18.1, "median_c": 26.6}
+{"t": 61.5, "wall": "20:27:26", "kind": "debuglog", "text": "[2615088] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 65.64, "wall": "20:27:30", "kind": "jump", "mad": 5.62, "base": 0.37, "std": 18.2, "median_c": 26.48}
+{"t": 71.968, "wall": "20:27:36", "kind": "jump", "mad": 5.73, "base": 0.37, "std": 18.1, "median_c": 26.48}
+{"t": 72.0, "wall": "20:27:36", "kind": "jump", "mad": 5.74, "base": 0.37, "std": 18.1, "median_c": 26.41}
+{"t": 76.125, "wall": "20:27:40", "kind": "jump", "mad": 5.76, "base": 0.37, "std": 18.0, "median_c": 26.48}
+{"t": 76.359, "wall": "20:27:40", "kind": "jump", "mad": 8.04, "base": 0.37, "std": 152.1, "median_c": 26.41}
+{"t": 76.406, "wall": "20:27:40", "kind": "jump", "mad": 7.26, "base": 0.37, "std": 17.6, "median_c": 26.41}
+{"t": 85.25, "wall": "20:27:49", "kind": "jump", "mad": 5.85, "base": 0.37, "std": 18.1, "median_c": 26.41}
+{"t": 86.609, "wall": "20:27:51", "kind": "jump", "mad": 7.35, "base": 0.37, "std": 152.2, "median_c": 26.41}
+{"t": 86.64, "wall": "20:27:51", "kind": "jump", "mad": 7.35, "base": 0.37, "std": 17.8, "median_c": 26.41}
+{"t": 121.5, "wall": "20:28:26", "kind": "debuglog", "text": "[2621102] I/shutter: shutter close\n\r\nwait cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 122.0, "wall": "20:28:26", "kind": "debuglog", "text": "[2621148] I/ffc_svc: ffc b update done\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"t": 122.0, "wall": "20:28:26", "kind": "frozen", "frames": 15, "since": 121.406}
+{"label": "on", "summary": true, "seconds": 150.0, "frames": 3749, "fps": 24.99, "stalls": [], "gaps": [], "shutter_log": [0.5, 1.0, 61.5, 121.5, 122.0], "frozen": [0.812, 61.406, 122.0], "jumps": [20.843, 20.89, 26.171, 26.203, 36.046, 38.89, 39.484, 39.531, 55.437, 55.484, 59.718, 60.687, 60.718, 61.406, 65.64, 71.968, 72.0, 76.125, 76.359, 76.406, 85.25, 86.609, 86.64], "median_c_range": [26.41, 26.73]}

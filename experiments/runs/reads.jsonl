@@ -1,0 +1,3 @@
+{"label": "reads", "start": "2026-11-20 20:14:37", "seconds": 8.0}
+{"t": 0.0, "wall": "20:14:37", "kind": "debuglog", "text": "[2538244] I/std cmd: std : 1 2f 81\r\n\r\n\n\r\n cnt:0\n\r\n\n\r\n\n\r\nfps.\r\n\r\n"}
+{"label": "reads", "summary": true, "seconds": 8.0, "frames": 200, "fps": 25.0, "stalls": [], "gaps": [], "median_c_range": [26.54, 26.6]}

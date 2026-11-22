@@ -1,0 +1,94 @@
+# This repository is code-only: source, build scripts, our own docs (Markdown) and our own test
+# captures. Third-party documents, downloads, binaries and design files stay out of it.
+
+# --- build output -------------------------------------------------------------------------
+bin/
+obj/
+.vs/
+*.user
+*.suo
+__pycache__/
+# the installer build.ps1 leaves at the top, and any other installer or binary
+*.msi
+*.exe
+*.dll
+*.pdb
+*.wixpdb
+
+# --- third-party documents (manuals, datasheets, papers, SDKs): link to them instead -------
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.odt
+*.ods
+*.rtf
+*.chm
+*.epub
+*.djvu
+
+# --- downloads and archives (vendor SDKs, apps, firmware) ------------------------------------
+downloads/
+Downloads/
+*.zip
+*.7z
+*.rar
+*.tar
+*.tgz
+*.tar.gz
+*.apk
+*.ipa
+*.iso
+*.img
+*.hex
+*.fw
+
+# --- images and video (product photos, screenshots, recordings) -----------------------------
+# add a screenshot of our own on purpose with: git add -f <file>
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+*.tif
+*.tiff
+*.heic
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# --- CAD and PCB design files (Fusion 360 models, exports; they belong in their own repository) --
+*.f3d
+*.f3z
+*.step
+*.stp
+*.stl
+*.3mf
+*.obj
+*.iges
+*.igs
+*.dxf
+*.kicad_pcb
+*.kicad_sch
+*.kicad_pro
+*.brd
+*.sch
+*.gbr
+
+# --- raw camera captures from the experiments (large; the summaries in runs/ are kept) --------
+experiments/runs/raw/
+experiments/stalls/runs/raw/
+experiments/downloads/
+
+# --- our own test captures are source: keep them even though they are binary ---------------
+!tests/fixtures/*.bin
+!tests/fixtures/*.bin.gz
+
+# --- notes for Claude Code sessions: local only, never uploaded ----------------------------
+Claude-Notes/
+CLAUDE.local.md

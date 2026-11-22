@@ -1,0 +1,28 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+	<!--
+	The Windows Installer package (.msi) for the TC001 Max Thermal Webcam. build.ps1 builds it after
+	publishing to ..\bin\publish; the result is bin\installer\TC001MaxWebcam-<version>-x64.msi, which build.ps1 moves to the top of the repository.
+	Double-click it: Windows asks for administrator rights once (UAC) and the package does what
+	install.ps1 does (Package.wxs lists every step). WiX Toolset (MS-RL), restored from NuGet like
+	DirectNCore; it is a build tool, not shipped, apart from the small custom-action DLLs of its UI,
+	Util and NetFx extensions inside the .msi (THIRD_PARTY_NOTICES.txt).
+	-->
+	<PropertyGroup>
+		<ProductVersion Condition="'$(ProductVersion)' == ''">1.2.0</ProductVersion>
+		<OutputName>TC001MaxWebcam-$(ProductVersion)-x64</OutputName>
+		<OutputType>Package</OutputType>
+		<InstallerPlatform>x64</InstallerPlatform>
+		<PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildThisFileDirectory)..\bin\publish\</PublishDir>
+		<DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishDir);RepoDir=$(MSBuildThisFileDirectory)..\</DefineConstants>
+		<!-- warnings as errors: the package must build clean -->
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+		<PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+		<PackageReference Include="WixToolset.Netfx.wixext" Version="5.0.2" />
+	</ItemGroup>
+
+</Project>
