@@ -18,6 +18,12 @@ fixed-pattern growth. The end-of-night manual shutter checks it independently: t
 uniform reference, so the jump J(p) = mean(after) - mean(before), minus its median and its
 smooth part, is the per-pixel offset error the camera had built up; it should match -r_final.
 
+Section 5 (runs with --ffc-every-min, added 2026-11-22): every shutter's jump is minus the drift
+since the previous one. Per-pixel linear models of that drift (in elapsed time, in the change of
+the camera's temperature word 65, or both), the idea of the shutterless-NUC papers (Nugent et
+al. 2013, Tempelhahn et al. 2016), are fitted on the odd-numbered shutters and scored on the
+even-numbered ones.
+
 usage: analyze_noise.py <run_dir> [--smooth-px 15]
 Writes report.md, analysis.json and *.png into the run directory.
 """
@@ -110,6 +116,149 @@ def burst_noise(frames: np.ndarray) -> dict:
             "sigma_t_mk": float(frame_mean.std() * MK), "sigma_tv_mk": float(rows.std() * MK),
             "sigma_th_mk": float(cols.std() * MK), "sigma_tvh_mk": float(rest.std() * MK),
             "_map": per_px * MK}
+
+
+def periodic_pairs(run: Path, n_avg: int = 250) -> list[dict]:
+    """Every shutter with frames saved on both sides: the periodic ones (ffcNN_pre / ffcNN_post,
+    from --ffc-every-min) and the end one (pre_ffc / post_ffc). Each: time t (s since the start
+    shutter), the jump (after minus before, raw counts, n_avg-frame means) and the times of its
+    before / after frames. Empty when no periodic shutter ran."""
+    names = sorted(p.name[len("burst_"):-len("_pre_index.bin")] for p in run.glob("burst_ffc*_pre_index.bin"))
+    out = []
+    for name in names + ["end"]:
+        pre_n, post_n = (f"{name}_pre", f"{name}_post") if name != "end" else ("pre_ffc", "post_ffc")
+        pre = load(run, f"burst_{pre_n}.u16", "<u2", (NPIX,))
+        post = load(run, f"burst_{post_n}.u16", "<u2", (NPIX,))
+        pi = load(run, f"burst_{pre_n}_index.bin", IDX_DT)
+        qi = load(run, f"burst_{post_n}_index.bin", IDX_DT)
+        if pre is None or post is None or pi is None or qi is None or len(pre) < 25 or len(post) < 25:
+            continue
+        jump = post[:n_avg].astype(np.float64).mean(0) - pre[-n_avg:].astype(np.float64).mean(0)
+        out.append({"name": name, "t_pre": float(pi["t"][min(len(pi), len(pre)) - 1]),
+                    "t_post": float(qi["t"][0]), "t": float((pi["t"][-1] + qi["t"][0]) / 2),
+                    "jump": jump.reshape(H, W)})
+    return out if len(out) > 1 else []
+
+
+def surface_basis(k: int) -> np.ndarray:
+    """Level, tilts and curvatures in x and y over the inner region (the shading model)."""
+    yy, xx = np.mgrid[0:H, 0:W]
+    x = (xx[k:-k, k:-k].ravel() - W / 2) / W
+    y = (yy[k:-k, k:-k].ravel() - H / 2) / H
+    return np.column_stack([np.ones_like(x), x, y, x * x, y * y])
+
+
+def drift_models(run: Path, pairs: list[dict], k: int, out: dict, plt) -> list[str]:
+    """Section 5. Each shutter's jump is minus the drift built up since the shutter before it,
+    over a known time dt and a known change dT of the camera temperature (metadata word 65).
+    Per-pixel models are fitted on the odd-numbered shutters and tested on the even-numbered
+    ones: how much of each held-out jump would the model have removed without the shutter?"""
+    meta = load(run, "meta_1hz.u16", "<u2", (256,))
+    mi = load(run, "frames_1hz_index.bin", IDX_DT)
+    n = min(len(meta), len(mi))
+    w65, tm = meta[:n, 65].astype(np.float64), mi["t"][:n]
+
+    def temp_at(t0: float, t1: float) -> float:
+        s = (tm >= t0) & (tm <= t1)
+        return float(w65[s].mean()) if s.any() else float(np.interp((t0 + t1) / 2, tm, w65))
+
+    inner = (slice(k, -k), slice(k, -k))
+    prev_t, prev_T = 0.0, temp_at(0.0, 10.0)
+    rows = []
+    for p in pairs:
+        T_before = temp_at(p["t_pre"] - 10, p["t_pre"])
+        J = p["jump"] * MK
+        J = J - np.median(J)
+        rows.append({"name": p["name"], "t": p["t"], "dt_h": (p["t"] - prev_t) / 3600, "dT": T_before - prev_T,
+                     "drift": -J[inner].ravel()})
+        prev_t, prev_T = p["t_post"], temp_at(p["t_post"], p["t_post"] + 10)
+    D = np.array([r["drift"] for r in rows])                 # shutters x pixels, mK
+    dt_h = np.array([r["dt_h"] for r in rows])
+    dT = np.array([r["dT"] for r in rows])
+    train = np.arange(len(rows)) % 2 == 0                    # shutters 1, 3, 5... (1-based)
+    test = ~train
+    B = surface_basis(k)
+    proj = B @ np.linalg.pinv(B)                             # pixels -> shading surface
+    D_shade = D @ proj.T
+    D_fine = D - D_shade
+
+    def fit_predict(X_tr: np.ndarray, X_te: np.ndarray, Y: np.ndarray) -> np.ndarray:
+        """Per-pixel least squares through the origin: Y_train = X_train @ C, predict X_test @ C."""
+        C, *_ = np.linalg.lstsq(X_tr, Y[train], rcond=None)
+        return X_te @ C
+
+    models = {
+        "time only (rate x dt)": dt_h[:, None],
+        "camera temperature (coef x dT)": dT[:, None],
+        "temperature and time": np.column_stack([dT, dt_h]),
+    }
+    res: dict = {"shutters": [{kk: (round(v, 4) if isinstance(v, float) else v) for kk, v in r.items() if kk != "drift"}
+                              for r in rows],
+                 "train": int(train.sum()), "test": int(test.sum())}
+    lines = ["## 5. Predicting the drift between shutters", "",
+             f"{len(rows)} shutters with frames on both sides; each jump is minus the drift since the "
+             f"shutter before it, over dt hours and dT counts of metadata word 65 (the camera's "
+             f"temperature). Models are fitted per pixel on shutters 1, 3, 5... ({int(train.sum())}) "
+             f"and tested on 2, 4, 6... ({int(test.sum())}). Shading = the 5-term surface (level, "
+             f"tilts, curvatures); fine = the rest. Borders of {k} px left out.", "",
+             "| shutter | at (h) | dt (h) | dT (counts) | drift rms (mK) | shading rms | fine rms |",
+             "|---|---|---|---|---|---|---|"]
+    for i, r in enumerate(rows):
+        lines.append(f"| {r['name']}{'' if train[i] else ' (test)'} | {r['t'] / 3600:.2f} | {r['dt_h']:.2f} | "
+                     f"{r['dT']:+.1f} | {np.sqrt((D[i] ** 2).mean()):.1f} | {np.sqrt((D_shade[i] ** 2).mean()):.1f} | "
+                     f"{np.sqrt((D_fine[i] ** 2).mean()):.1f} |")
+    lines += [""]
+    if train.sum() < 2 or test.sum() < 1:
+        lines += ["Too few shutters to fit and test a model.", ""]
+        out["drift_models"] = res
+        return lines
+    lines += ["| model | held-out drift rms left (mK) | of which shading | fine | share removed |",
+              "|---|---|---|---|---|"]
+    base = np.sqrt((D[test] ** 2).mean())
+    lines.append(f"| no correction | {base:.1f} | {np.sqrt((D_shade[test] ** 2).mean()):.1f} | "
+                 f"{np.sqrt((D_fine[test] ** 2).mean()):.1f} | 0 % |")
+    res["models"] = {"none": {"rms_mk": float(base)}}
+    left_by_model = {}
+    for name, X in models.items():
+        if X.shape[1] >= train.sum():
+            continue
+        pred = fit_predict(X[train], X[test], D)
+        left = D[test] - pred
+        rms = float(np.sqrt((left ** 2).mean()))
+        rms_s = float(np.sqrt(((left @ proj.T) ** 2).mean()))
+        rms_f = float(np.sqrt(((left - left @ proj.T) ** 2).mean()))
+        share = 1 - rms ** 2 / base ** 2
+        res["models"][name] = {"rms_mk": rms, "shading_rms_mk": rms_s, "fine_rms_mk": rms_f, "share_removed": share}
+        left_by_model[name] = np.sqrt((left ** 2).mean(1))
+        lines.append(f"| {name} | {rms:.1f} | {rms_s:.1f} | {rms_f:.1f} | {100 * share:.0f} % |")
+    lines += ["", "Share removed = 1 - (rms left / rms with no correction)^2 over the held-out shutters. "
+              "The shutter's own noise sets a floor no model can beat; the fine part includes it.", ""]
+    out["drift_models"] = res
+    # figure: drift per held-out shutter with and without each model; shading vs dT
+    fig, ax = plt.subplots(1, 2, figsize=(11, 3.8))
+    ti = np.flatnonzero(test)
+    xs = np.arange(len(ti))
+    wbar = 0.8 / (1 + len(left_by_model))
+    ax[0].bar(xs, np.sqrt((D[test] ** 2).mean(1)), wbar, label="no correction")
+    for j, (name, v) in enumerate(left_by_model.items(), start=1):
+        ax[0].bar(xs + j * wbar, v, wbar, label=name)
+    ax[0].set_xticks(xs + wbar * len(left_by_model) / 2, [rows[i]["name"] for i in ti], rotation=45)
+    ax[0].set_ylabel("drift rms left (mK)")
+    ax[0].set_title("held-out shutters")
+    ax[0].legend(fontsize=8)
+    amp = (np.linalg.pinv(B) @ D.T)[2]                       # the y-tilt term of each shutter's shading
+    ax[1].plot(dT[train], amp[train], "o", label="fit shutters")
+    ax[1].plot(dT[test], amp[test], "s", label="test shutters")
+    ax[1].axhline(0, color="0.7", lw=0.8)
+    ax[1].set_xlabel("dT since the previous shutter (word 65 counts)")
+    ax[1].set_ylabel("top-to-bottom tilt (mK per image height)")
+    ax[1].set_title("shading vs camera temperature")
+    ax[1].legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(run / "drift_models.png", dpi=110)
+    plt.close(fig)
+    lines += ["![drift models](drift_models.png)", ""]
+    return lines
 
 
 def main() -> int:
@@ -230,6 +379,10 @@ def main() -> int:
 
     # ---- 3. per-pixel drift -----------------------------------------------------------------
     k = a.smooth_px
+    pairs = periodic_pairs(run)
+    if pairs and (good & (widx["t1"] <= pairs[0]["t"])).sum() >= 6:
+        # periodic shutters reset the drift: section 3 covers the stretch before the first
+        good = good & (widx["t1"] <= pairs[0]["t"])
     use = np.flatnonzero(good)
     m0 = wmean[use[0]].reshape(H, W).astype(np.float64)
     g, s_std, r_std, r_list = [], [], [], []
@@ -255,7 +408,11 @@ def main() -> int:
                     "per_pixel_rate_mk_per_h_median_abs": float(np.median(np.abs(slope[inner]))),
                     "per_pixel_rate_mk_per_h_p99_abs": float(np.percentile(np.abs(slope[inner]), 99)),
                     "corr_with_scene_detail": corr_scene}
-    lines += ["## 3. Per-pixel drift since the start shutter (static, non-uniform scene)", "",
+    lines += ["## 3. Per-pixel drift since the start shutter (static, non-uniform scene)", ""]
+    if pairs:
+        lines += [f"Periodic shutters ran during this run, so this section covers only the "
+                  f"{th[-1]:.2f} h before the first one; section 5 covers the rest.", ""]
+    lines += [
               f"Each 10-s mean frame minus the first, split into a global offset, a smooth field "
               f"({k}-px double box blur) and the per-pixel remainder (borders of {k} px left out).", "",
               f"- Global offset after {th[-1]:.2f} h: {g[-1]:+.0f} mK.",
@@ -309,14 +466,16 @@ def main() -> int:
         j = (post[:250].astype(np.float64).mean(0) - pre[-250:].astype(np.float64).mean(0)).reshape(H, W)
         jg = float(np.median(j))
         jr = j - jg - smooth(j - jg, k)
-        c = float(np.corrcoef(jr[inner].ravel(), r_final[inner].ravel())[0, 1])
+        # with periodic shutters the end jump covers only the time since the last one, not section 3
+        c = float("nan") if pairs else float(np.corrcoef(jr[inner].ravel(), r_final[inner].ravel())[0, 1])
         out["end_shutter"] = {"global_jump_mk": jg * MK, "per_pixel_jump_std_mk": float(jr[inner].std() * MK),
                               "corr_with_minus_drift": -c}
         lines += ["## 4. The end shutter (independent check)", "",
                   f"The manual shutter at the end resets the offsets against a uniform reference. Jump "
                   f"after minus before (10-s means): global {jg * MK:+.0f} mK, per-pixel std "
-                  f"{jr[inner].std() * MK:.1f} mK. Correlation of the per-pixel jump with minus the "
-                  f"measured drift: {-c:+.2f} (near +1: the drift measured above is what the shutter removes).", ""]
+                  f"{jr[inner].std() * MK:.1f} mK."
+                  + ("" if pairs else f" Correlation of the per-pixel jump with minus the measured drift: "
+                     f"{-c:+.2f} (near +1: the drift measured above is what the shutter removes)."), ""]
         fig, ax = plt.subplots(1, 2, figsize=(11, 3.8))
         lim = np.percentile(np.abs(jr[inner]), 99) * MK
         im = ax[0].imshow(jr * MK, cmap="RdBu_r", vmin=-lim, vmax=lim)
@@ -330,6 +489,10 @@ def main() -> int:
         fig.savefig(run / "end_shutter.png", dpi=110)
         plt.close(fig)
         lines += ["![end shutter](end_shutter.png)", ""]
+
+    # ---- 5. periodic shutters: can the drift be predicted from the camera's temperature? --------
+    if pairs:
+        lines += drift_models(run, pairs, k, out, plt)
 
     lines += ["## Scene", "", "![scene at the start](scene_at_start.png)", "",
               "Numbers in `analysis.json`; method in `docs/NOISE_AND_CALIBRATION.md`."]

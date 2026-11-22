@@ -20,6 +20,10 @@ off while a warm person is in the picture until they have been gone for 10 minut
    ``--absent-min`` minutes with nobody seen. Gives up if too little time is left.
 3. **record**: auto shutter off (read back), one manual shutter (the start reference), then
    records until the end. A person seen during the recording is flagged per second, not stopped.
+   With ``--ffc-every-min N`` (added 2026-11-22) it also fires a manual shutter every N minutes,
+   saving ``--ffc-pair-s`` seconds at full rate before and after each one. Each after-minus-before
+   is the drift since the previous shutter, at a known change of the camera's temperature
+   (metadata word 65), which is what ``analyze_noise.py`` section 5 fits and checks.
 4. **end**: the last ``--ffc-tail-s`` seconds before a second manual shutter and the same after
    it are saved at full rate. Because the shutter is a uniform reference and the scene does not
    change in those few seconds, after-minus-before is the per-pixel offset drift the camera
@@ -33,6 +37,7 @@ Output: ``experiments/noise/runs/raw/<YYYYmmdd-HHMMSS>/`` (git-ignored). Layout 
 usage (Windows Task Scheduler runs it with pythonw.exe so no window opens):
   python noise_capture.py --start-at 2026-11-22T03:00 --end-at 2026-11-22T06:30
   python noise_capture.py --fake --end-at +6m --absent-min 0.5 --burst-every-min 2   (dry run)
+  python noise_capture.py --start-at ... --end-at ... --ffc-every-min 15   (drift-model run)
 """
 
 from __future__ import annotations
@@ -262,6 +267,10 @@ class FakeSource:
         self.scene, self.y, self.x = scene, y, x
         self.drift_rate = rng.normal(0, 0.05, NPIX).astype(np.float32)  # degC per simulated hour
         self.offset = np.zeros(NPIX, np.float32)
+        # drift that follows the camera's temperature (metadata word 65, counts): a per-pixel
+        # coefficient plus a top-to-bottom shading, as seen on the real camera on 2026-11-22
+        self.coef = (rng.normal(0, 0.002, NPIX) + 0.02 * (y.ravel() / H - 0.5)).astype(np.float32)
+        self.w65_ref = self.w65(0.0)
         self.t_open = time.monotonic()
         self.t_last = self.t_open
         self.seq = 0
@@ -277,6 +286,7 @@ class FakeSource:
         self.log.msg(f"fake cmd {name}")
         if name == "shutter":
             self.offset[:] = 0
+            self.w65_ref = self.w65((time.monotonic() - self.t_open) * self.speed / 3600)
         elif name == "set_auto_ffc_off":
             self.auto_ffc = b"\x00"
         elif name == "set_auto_ffc_on":
@@ -284,6 +294,12 @@ class FakeSource:
         elif name == "get_auto_ffc_status":
             return self.auto_ffc
         return b""
+
+    @staticmethod
+    def w65(hours: float) -> float:
+        """Simulated camera temperature in word-65 counts: a slow rise with a wobble, so that
+        it does not move in step with time."""
+        return 7610 + 9 * hours + 4 * np.sin(2.1 * hours)
 
     def debug_line(self) -> str:
         return "I/fake: ok"
@@ -299,7 +315,8 @@ class FakeSource:
         t = now - self.t_open
         hours = t * self.speed / 3600
         self.offset += self.drift_rate * dt_h + self.rng.normal(0, 0.002, NPIX).astype(np.float32) * np.sqrt(dt_h)
-        img = self.scene.ravel() - 0.8 * hours + self.offset
+        w65 = self.w65(hours)
+        img = self.scene.ravel() - 0.8 * hours + self.offset + self.coef * (w65 - self.w65_ref)
         img = img + self.rng.normal(0, 0.05, NPIX) + np.tile(self.rng.normal(0, 0.02, W), H)
         if t < self.person_s:   # a person walking left to right
             cx = 40 + (t / self.person_s) * 180
@@ -310,6 +327,7 @@ class FakeSource:
         self.seq += 1
         meta = np.zeros(256, np.uint16)
         meta[64] = self.seq & 0xFFFF
+        meta[65] = int(round(w65))
         return np.round((img + 273.15) * 64).astype(np.uint16), meta
 
     def close(self) -> None:
@@ -559,12 +577,22 @@ class Study:
                 break
             bursts.append((f"b{k:02d}", bt))
             k += 1
+        # periodic manual shutters (--ffc-every-min): each gets --ffc-pair-s at full rate before and
+        # after it, so after-minus-before is the drift built up since the previous shutter
+        pre_ffc_t = end_rec - self.summary["t0_wall"] - a.ffc_tail_s
+        ffc_due: list[float] = []
+        if a.ffc_every_min > 0:
+            k = 1
+            while (ft := k * a.ffc_every_min * 60) + a.ffc_settle_s + a.ffc_pair_s < pre_ffc_t - a.ffc_pair_s:
+                ffc_due.append(ft)
+                k += 1
+        self.summary["periodic_ffc_planned"] = len(ffc_due)
+        ffc_k = 0
         burst_i, in_burst = 0, None
         win_sum = win_sq = None
         win_n, win_t0, win_present = 0, 0.0, 0
         sec_id, sec_sum, sec_n, sec_present = None, None, 0, False
         series_buf: list[tuple] = []
-        pre_ffc_t = end_rec - self.summary["t0_wall"] - a.ffc_tail_s
 
         def close_window(t_end: float) -> None:
             nonlocal win_sum, win_sq, win_n, win_present
@@ -579,6 +607,10 @@ class Study:
 
         for now, wall, temps, meta in self.frames():
             t = now - t0
+            # a periodic shutter is due: record its "before" pair first
+            if in_burst is None and ffc_k < len(ffc_due) and t >= ffc_due[ffc_k] - a.ffc_pair_s:
+                in_burst = (f"ffc{ffc_k + 1:02d}_pre", t + a.ffc_pair_s)
+                self.log.ev("burst_start", name=in_burst[0])
             # bursts at full rate
             if in_burst is None and burst_i < len(bursts) and t >= bursts[burst_i][1]:
                 in_burst = (bursts[burst_i][0], t + a.burst_s)
@@ -597,6 +629,16 @@ class Study:
                     in_burst = None
                     if name == "pre_ffc":
                         break
+                    if name.startswith("ffc") and name.endswith("_pre"):
+                        # fire it, drop the settling frames, then record the "after" pair; the
+                        # 10-s window is closed first so no window straddles the shutter
+                        close_window(t)
+                        ffc_k += 1
+                        self.ffc(f"periodic{ffc_k:02d}")
+                        t_post = time.monotonic() - t0
+                        in_burst = (f"ffc{ffc_k:02d}_post", t_post + a.ffc_pair_s)
+                        self.log.ev("burst_start", name=in_burst[0])
+                        continue
             # per-second: 1 Hz raw frame, metadata, presence
             sid = int(t)
             if sec_id != sid:
@@ -676,7 +718,7 @@ class Study:
                 "win_mean.f4 / win_var.f4": f"per {a.window_s}-s window: per-pixel mean and variance (raw units, float32)",
                 "win_index.bin": f"per window: {WIN_DT.descr}",
                 "series.bin": f"every recorded frame: {SERIES_DT.descr}; px = 64 pixels at rows {SAMPLE_ROWS.tolist()} x cols {SAMPLE_COLS.tolist()}",
-                "burst_<name>.u16 + burst_<name>_index.bin": f"full-rate raw frames: 'start' and every {a.burst_every_min} min for {a.burst_s} s; 'pre_ffc' / 'post_ffc' the last {a.ffc_tail_s} s before and the first after the end shutter",
+                "burst_<name>.u16 + burst_<name>_index.bin": f"full-rate raw frames: 'start' and every {a.burst_every_min} min for {a.burst_s} s; 'pre_ffc' / 'post_ffc' the last {a.ffc_tail_s} s before and the first after the end shutter; 'ffcNN_pre' / 'ffcNN_post' {a.ffc_pair_s} s before and after each periodic shutter (every {a.ffc_every_min} min, 0 = none)",
                 "events.jsonl": "phases, presence, firmware log lines, stalls, gaps, errors",
             },
             "presence": {"warm_band_c": [WARM_ABS_C, f"median+{WARM_REL_C}", WARM_MAX_C], "warm_px": WARM_PX,
@@ -748,6 +790,10 @@ def main() -> int:
     ap.add_argument("--burst-s", type=float, default=60.0)
     ap.add_argument("--ffc-tail-s", type=float, default=60.0)
     ap.add_argument("--ffc-settle-s", type=float, default=5.0)
+    ap.add_argument("--ffc-every-min", type=float, default=0.0,
+                    help="also fire a manual shutter this often during the recording (0 = only at the start and end)")
+    ap.add_argument("--ffc-pair-s", type=float, default=10.0,
+                    help="full-rate seconds saved before and after each periodic shutter")
     ap.add_argument("--window-s", type=float, default=10.0)
     ap.add_argument("--out", type=Path, default=HERE / "runs" / "raw")
     ap.add_argument("--fake", action="store_true", help="simulated camera (dry run)")
