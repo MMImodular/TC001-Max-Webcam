@@ -83,6 +83,7 @@ Downloads/
 # --- raw camera captures from the experiments (large; the summaries in runs/ are kept) --------
 experiments/runs/raw/
 experiments/stalls/runs/raw/
+experiments/noise/runs/raw/
 experiments/downloads/
 
 # --- our own test captures are source: keep them even though they are binary ---------------

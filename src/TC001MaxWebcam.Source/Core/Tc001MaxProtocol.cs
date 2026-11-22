@@ -29,9 +29,10 @@
 //    block straddling two composite frames has the next header inside it; it is spliced out.
 //  * Temperature ([REF] "Temperature"): degC = raw / 64 - 273.15; raw 0 or 0xFFFF = no reading
 //    (WendyOS frame.go; P3_PROTOCOL.md "Temperature Conversion").
-//  * Picture leak (measured 2026-11-21, docs/PROTOCOL.md "Picture leak"): now and then the first
-//    few to ~70 temperature words of a block hold grey-picture words (luma, chroma 0x80), which
-//    read as 238.9..242.8 degC; RepairPictureLeak copies the scene from the row below.
+//  * Picture leak (docs/PROTOCOL.md "Picture leak"): the first temperature words of a block held
+//    grey-picture words (238.9..242.8 degC). 1.3.4 found the cause in BlockParser (a header inside
+//    the end row; the block was taken up to 20 bytes early, shifting the whole frame) and fixed
+//    it. RepairPictureLeak stays as a safety net and should no longer fire.
 //
 // The block finder (BlockParser) is adapted from WendyOS PR #2621
 // (go/internal/agent/usbthermal/parser.go, Copyright Wendy Labs, Apache License 2.0), translated
@@ -356,9 +357,13 @@ namespace TC001MaxWebcam.Core
         /// <summary>The block's end row, ff 00 x 256 (protocol END_ROW).</summary>
         public static ReadOnlySpan<byte> EndRowPattern => EndRow;
 
+        /// <summary>The first half of the end row: one header can cut the row, but never both halves.</summary>
+        private static readonly byte[] HalfEndRow = EndRow[..(Tc001Max.RowBytes / 2)];
+
         private byte[] _buf = new byte[2 * Tc001Max.BlockBytes];
         private int _len;
         private int _scan;
+        private int _done; // end of the last block taken: a cut end row may start before _scan, never before this
 
         public BlockParser(bool skipFirst = false, ParserStats? stats = null)
         {
@@ -389,17 +394,22 @@ namespace TC001MaxWebcam.Core
             var output = new List<byte[]>();
             while (true)
             {
+                // A composite-frame header can cut the end row in two (1.3.4). Before, the parser
+                // looked only for a whole 512-byte end row: with the header in the row's last
+                // bytes, the run ended at the header, the metadata row's own trailing ff 00 pairs
+                // made up the rest, and the block was taken 2..20+ bytes too early: the frame
+                // shifted sideways and its first words read as picture data (the "picture leak").
+                // With the header anywhere else in the row the block was lost. So: find at least
+                // half an end row, then join the run across one header before or after it.
                 var buf = _buf.AsSpan(0, _len);
-                var rel = _scan < _len ? buf.Slice(_scan).IndexOf(EndRow) : -1;
+                var rel = _scan < _len ? buf.Slice(_scan).IndexOf(HalfEndRow) : -1;
                 if (rel < 0)
                 {
-                    _scan = Math.Max(_scan, _len - Tc001Max.RowBytes + 1);
+                    _scan = Math.Max(_scan, _len - HalfEndRow.Length + 1);
                     break;
                 }
                 var m = _scan + rel;
-                var e = m + Tc001Max.RowBytes;
-                while (e + 1 < _len && buf[e] == 0xFF && buf[e + 1] == 0x00 && e - m < MaxRun)
-                    e += 2;
+                var e = RunEnd(m + HalfEndRow.Length, m);
                 if (e - m >= MaxRun)
                 {
                     Stats.Rejected++;
@@ -411,6 +421,53 @@ namespace TC001MaxWebcam.Core
                     _scan = m; // the run may continue in bytes not read yet
                     break;
                 }
+                var cut = false;
+                // a header right after the run (h = e), or between the two bytes of a pair (h = e + 1)
+                var odd = buf[e] == 0xFF;
+                var h = odd ? e + 1 : e;
+                if (buf[h] == Tc001Max.HeaderBytes)
+                {
+                    if (h + Tc001Max.HeaderBytes + 3 > _len)
+                    {
+                        _scan = m; // a header may be arriving
+                        break;
+                    }
+                    var c = h + Tc001Max.HeaderBytes;
+                    if (Tc001Max.ParseHeader(buf, h) != null && (odd ? buf[c] == 0x00 : buf[c] == 0xFF && buf[c + 1] == 0x00))
+                    {
+                        c = RunEnd(odd ? c + 1 : c, m + Tc001Max.HeaderBytes);
+                        if (c + 1 >= _len)
+                        {
+                            _scan = m;
+                            break;
+                        }
+                        e = c;
+                        cut = true;
+                    }
+                }
+                // or a header right before it (the first part was too short to be found)
+                for (var shift = 0; shift <= 1 && !cut; shift++)
+                {
+                    // shift 1: the header splits a pair, "ff [header] 00"
+                    h = m - Tc001Max.HeaderBytes - shift;
+                    var p = h - shift;
+                    if (p - 2 < _done || Tc001Max.ParseHeader(buf, h) == null)
+                        continue;
+                    if (shift == 1 && (buf[m - 1] != 0x00 || buf[p] != 0xFF))
+                        continue;
+                    while (p - 2 >= _done && buf[p - 2] == 0xFF && buf[p - 1] == 0x00 && h - p < MaxRun)
+                        p -= 2;
+                    if (p < h)
+                    {
+                        m = p;
+                        cut = true;
+                    }
+                }
+                if (e - m - (cut ? Tc001Max.HeaderBytes : 0) < Tc001Max.RowBytes)
+                {
+                    _scan = e; // shorter than an end row
+                    continue;
+                }
                 if (!FindBlock(m, e, out var start, out var hdr))
                 {
                     _scan = e;
@@ -420,7 +477,7 @@ namespace TC001MaxWebcam.Core
                 if (SkipFirst)
                 {
                     SkipFirst = false;
-                    _scan = end;
+                    _scan = _done = end;
                     continue;
                 }
                 var block = Assemble(start, hdr, Tc001Max.BlockBytes);
@@ -428,11 +485,19 @@ namespace TC001MaxWebcam.Core
                     Stats.Spliced++;
                 NoteSequence(block);
                 Stats.Blocks++;
-                _scan = end;
+                _scan = _done = end;
                 output.Add(block);
             }
             Compact();
             return output;
+        }
+
+        /// <summary>End of the ff 00 run continuing at <paramref name="pos"/> (at most MaxRun past <paramref name="from"/>).</summary>
+        private int RunEnd(int pos, int from)
+        {
+            while (pos + 1 < _len && _buf[pos] == 0xFF && _buf[pos + 1] == 0x00 && pos - from < MaxRun)
+                pos += 2;
+            return pos;
         }
 
         private void Append(ReadOnlySpan<byte> chunk)
@@ -454,7 +519,8 @@ namespace TC001MaxWebcam.Core
                     Stats.Partial++;
                     return false;
                 }
-                if (Grey(s, -1) && FindHeader(s, end) < 0)
+                // no header in the window, nor one straddling its start (that is the case below)
+                if (Grey(s, -1) && FindHeader(Math.Max(0, s - Tc001Max.HeaderBytes + 1), end) < 0)
                 {
                     start = s;
                     return true;
@@ -543,6 +609,7 @@ namespace TC001MaxWebcam.Core
             Buffer.BlockCopy(_buf, keep, _buf, 0, _len - keep);
             _len -= keep;
             _scan -= keep;
+            _done = Math.Max(0, _done - keep);
         }
     }
 }

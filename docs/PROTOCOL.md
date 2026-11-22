@@ -212,7 +212,18 @@ multiple of 4 counts (1/16 K), as WendyOS also found.
 if any reading is below -100 degC or above 600 degC, if fewer than half the pixels have a
 reading, or if the median is outside -40..150 degC.
 
-**Picture leak** (`RepairPictureLeak`, measured 2026-11-21): now and then the first few to ~70
+**Picture leak: found to be our parser, fixed in 1.3.4.** A composite-frame header that lands in
+the last bytes of a block's end row cut the ff 00 run short; the metadata row ends in ff 00 pairs
+too, so the parser still saw a whole end row and took the block up to 20 bytes too early. The
+whole frame then sits k words to the right (k = 1..10 with this camera's metadata; it looks like
+a sideways jump), its first k temperature words are the end of the grey picture, and the
+metadata shifts too. The header moves through the block once every 256 frames (10.24 s), which is
+why the webcam logged a 6-word "repair" exactly every 10.24 s. With the header elsewhere in the end
+row the block was dropped. `BlockParser` now finds half an end row and joins the run across one
+header (`tests`: "a header anywhere in the block never shifts it"). labbench's Python
+`BlockParser` has the same flaw. The original description, kept for history:
+
+*Picture leak* (`RepairPictureLeak`, measured 2026-11-21): now and then the first few to ~70
 temperature words of a block (row 0 from x = 0) hold grey-picture words instead: luma in the low
 byte, chroma 0x80 in the high byte, which read as 238.9..242.8 degC. The rest of the frame is
 normal, so validation passes it. In labbench's 25 h AA characterization run on the owner's

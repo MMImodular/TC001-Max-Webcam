@@ -78,6 +78,10 @@ src\TC001MaxWebcam.Source\Usb\WinUsbLink.cs: this project's own, from Microsoft'
 experiments\cam.py: command bytes from p3-ir-camera (Apache-2.0); crc16_xmodem / vdcmd and the
   auto-FFC ids adapted from thermalmaster (CC0-1.0); imports the author's private BlockParser
   (adapted from WendyOS parser.go, Apache-2.0).
+experiments\noise\noise_capture.py: drives the camera through experiments\cam.py (above); its
+  claim files follow the author's labbench ownership format. analyze_noise.py: written for this
+  project; its methods (3D noise, Allan deviation, Welch PSD) are from the papers cited in
+  docs\NOISE_AND_CALIBRATION.md.
 All other files (Core\CameraClaims.cs, Display.cs, FrameRenderer.cs, Log.cs, Palettes.cs,
   PixelFont.cs, Settings.cs, TrayArt.cs, UpdateRules.cs, WebcamEngine.cs,
   src\TC001MaxWebcam\Updater.cs, src\TC001MaxWebcam.Tray\*.cs (the tray icon, written from

@@ -19,7 +19,7 @@
 		<Platforms>x64</Platforms>
 		<PlatformTarget>x64</PlatformTarget>
 		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-		<Version>1.3.3</Version>
+		<Version>1.3.4</Version>
 		<Product>TC001 Max Thermal Webcam</Product>
 		<Description>TC001 Max Thermal Webcam tray icon (settings menu)</Description>
 	</PropertyGroup>

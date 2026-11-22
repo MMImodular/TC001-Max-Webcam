@@ -289,6 +289,31 @@ namespace TC001MaxWebcam.Tests
                     Eq(parser.Stats.Spliced, 1, $"offset {offset} spliced");
                 }
             });
+            yield return ("a header anywhere in the block never shifts it", () =>
+            {
+                // 1.3.4: a header in the last bytes of the end row made the parser take the block
+                // up to 20 bytes early (the frame shifted sideways; its first words read ~240 degC)
+                // every offset near the picture/temperature boundary, the metadata and end rows and
+                // the start, and a stride through the rest
+                var offsets = new SortedSet<int>();
+                for (var o = 0; o <= 2048; o++) offsets.Add(o);
+                for (var o = Tc001Max.PictureBytes - 1100; o <= Tc001Max.PictureBytes + 1100; o++) offsets.Add(o);
+                for (var o = Tc001Max.RawBytes - 1100; o <= Tc001Max.BlockBytes; o++) offsets.Add(o);
+                for (var o = 0; o <= Tc001Max.BlockBytes; o += 97) offsets.Add(o);
+                var bad = new List<string>();
+                foreach (var offset in offsets)
+                {
+                    var w = Window();
+                    var at = Margin + offset;
+                    var stream = Cat(w[..at], HeaderBytes(), w[at..]);
+                    var got = FeedAll(new BlockParser(), stream, offset % 3 == 0 ? 16384 : offset % 3 == 1 ? 333 : 7);
+                    if (got.Count > 1 || (got.Count == 1 && !got[0].AsSpan().SequenceEqual(Block())))
+                        bad.Add($"{offset}({got.Count} blocks)");
+                    else if (got.Count == 0 && offset > 0 && offset < Tc001Max.BlockBytes)
+                        bad.Add($"{offset}(lost)");
+                }
+                Check(bad.Count == 0, $"{bad.Count} offsets give a wrong block: {string.Join(" ", bad.Take(40))}");
+            });
             yield return ("two headers in one block are rejected", () =>
             {
                 var w = Window();

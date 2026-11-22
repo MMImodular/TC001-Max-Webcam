@@ -3,6 +3,16 @@
 Each `## <version>` section becomes the notes of that GitHub release
 (`.github/workflows/release.yml`). Add the section before running the release.
 
+## 1.3.4
+
+- **Fixed: the picture sometimes jumped sideways for one frame** (about every 10 s). When the
+  USB stream's 12-byte frame header landed in the last bytes of a thermal block, the block was
+  read up to 20 bytes too early: every pixel moved left by up to 10, and the first pixels read
+  about 240 degC (the "picture leak" that 1.2.0 patched over). With the header elsewhere in that
+  row, the frame was dropped. Both are fixed in the block finder, with a test that puts a header
+  at every position in a block.
+- Noise study tooling in `experiments/noise/` and `docs/NOISE_AND_CALIBRATION.md` (not shipped).
+
 ## 1.3.3
 
 - **Auto range speed.** Choose how fast the auto colour range tightens after something hot

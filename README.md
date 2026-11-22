@@ -36,7 +36,7 @@ spot marked and the temperatures written on the image.
 
 ## Where the project is at
 
-**Version 1.3.3 (November 2026). A personal project that works on the owner's PC. It is offered
+**Version 1.3.4 (November 2026). A personal project that works on the owner's PC. It is offered
 as-is, with no support.**
 
 Tested on real hardware (one TC001 Max, firmware 1.01.000, Windows 11 x64):
@@ -261,8 +261,8 @@ The log is `C:\ProgramData\TC001MaxWebcam\webcam.log`.
 | `src/TC001MaxWebcam.Tray/` | `TC001MaxWebcamTray.exe`: the tray icon and its settings window (plain Win32, no extra runtime). |
 | `installer/` | The WiX v5 `.msi` package. |
 | `tests/` | The console self-test, and real camera captures used as fixtures. |
-| `docs/` | `PROTOCOL.md` (the USB protocol, with sources), `STATE_OF_THE_ART.md`. |
-| `experiments/` | The Python experiments behind the auto-shutter and stall findings, with their logs. Not shipped. |
+| `docs/` | `PROTOCOL.md` (the USB protocol, with sources), `STATE_OF_THE_ART.md`, `NOISE_AND_CALIBRATION.md` (measuring noise and per-pixel drift). |
+| `experiments/` | The Python experiments behind the auto-shutter and stall findings, with their logs, and `noise/` (the overnight noise and drift study). Not shipped. |
 | `build.ps1`, `install.ps1`, `uninstall.ps1` | The build script, and the scripted install and uninstall. |
 | `.github/workflows/` | GitHub Actions: `build.yml` builds and tests every push; `release.yml` (run by hand) publishes a release with the `.msi`. |
 | `CHANGELOG.md` | What changed in each version; each section becomes that release's notes. |
