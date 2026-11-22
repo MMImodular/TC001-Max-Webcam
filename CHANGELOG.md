@@ -3,6 +3,13 @@
 Each `## <version>` section becomes the notes of that GitHub release
 (`.github/workflows/release.yml`). Add the section before running the release.
 
+## 1.3.3
+
+- **Auto range speed.** Choose how fast the auto colour range tightens after something hot
+  leaves the picture: Slow (about 25 s), Normal (about 12 s, as before), Fast (about 3 s) or
+  Instant (the next frame). It always widens at once. In the settings window under Range, or
+  `TC001MaxWebcam settings set range_speed=fast`.
+
 ## 1.3.2
 
 - **Tray icon with a settings window.** Click the thermal icon by the clock to open a small

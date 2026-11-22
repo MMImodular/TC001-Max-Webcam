@@ -711,6 +711,37 @@ namespace TC001MaxWebcam.Tests
                 Check(old.Overlay && old.Scale && problems.Count == 0, "an older file shows everything");
                 Throws<SettingsException>(() => SettingsFile.Apply(d, ["scale=maybe"]), "bool");
             });
+            yield return ("settings: range_speed, and the auto range narrows at that speed", () =>
+            {
+                var d = WebcamSettings.Default;
+                Eq((d.RangeSpeed, d.RangeTauS), (RangeSpeed.Normal, 4.0), "default normal, 4 s");
+                Check(SettingsFile.ToJson(d).Contains("\"range_speed\": \"normal\""), "written");
+                Check(SettingsFile.Help.Any(h => h.StartsWith("range_speed=")), "help line");
+                foreach (var (text, want, tau) in new[] { ("slow", RangeSpeed.Slow, 8.0), ("Fast", RangeSpeed.Fast, 1.0), ("instant", RangeSpeed.Instant, 0.0), ("normal", RangeSpeed.Normal, 4.0) })
+                {
+                    var st = SettingsFile.Apply(d, [$"range_speed={text}"]);
+                    Eq((st.RangeSpeed, st.RangeTauS), (want, tau), text);
+                    Check(SettingsWatcher.Same(Parse(SettingsFile.ToJson(st), out var problems), st) && problems.Count == 0, $"round trip {text}");
+                }
+                Throws<SettingsException>(() => SettingsFile.Apply(d, ["range_speed=warp"]), "bad value");
+                Check(SettingsWatcher.Describe(d with { RangeSpeed = RangeSpeed.Fast }).Contains("range auto (fast)"), "describe");
+
+                // 25 degC with a 60 degC spot, then 1 s later the spot is gone: the top of the range
+                // falls from 60 by 1 - exp(-1 / tau) of the way to 25 (rounded up to whole degrees)
+                foreach (var (tau, hi) in new[] { (8.0, 56.0), (4.0, 53.0), (1.0, 38.0), (0.0, 27.0) })
+                {
+                    var sm = new RangeSmoother { TauS = tau };
+                    Eq(sm.Update(HotFrame(), 256, 192, 0.0), (25.0, 60.0), $"tau {tau}: first frame");
+                    Eq(sm.Update(Full(25f), 256, 192, 1.0).Hi, hi, $"tau {tau}: 1 s later");
+                }
+                // the renderer takes the speed from the settings
+                var r = new FrameRenderer();
+                var fast = d with { RangeSpeed = RangeSpeed.Fast };
+                var bgra = new byte[FrameRenderer.OutBytes];
+                r.Render(new Picture { Kind = PictureKind.Live, Temperature = HotFrame(), Width = 256, Height = 192, Settings = fast, TWall = 100.0 }, bgra);
+                r.Render(new Picture { Kind = PictureKind.Live, Temperature = Full(25f), Width = 256, Height = 192, Settings = fast, TWall = 101.0 }, bgra);
+                Eq(r.LastRange.Hi, 38.0, "renderer: fast");
+            });
             yield return ("settings set: units change converts the manual range", () =>
             {
                 var c = WebcamSettings.Default with { Range = RangeMode.Manual, RangeMin = 20, RangeMax = 37 };

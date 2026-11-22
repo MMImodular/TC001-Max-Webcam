@@ -357,6 +357,9 @@ namespace TC001MaxWebcam.Tray
             var ranges = new[] { RangeMode.Auto, RangeMode.Locked, RangeMode.Manual };
             y = Segmented("Range", ["Auto", "Locked", "Manual"], Array.IndexOf(ranges, s.Range),
                 i => Set("range", ranges[i].ToString().ToLowerInvariant()), y, left, right);
+            var speeds = new[] { RangeSpeed.Slow, RangeSpeed.Normal, RangeSpeed.Fast, RangeSpeed.Instant };
+            y = Segmented("Speed", ["Slow", "Normal", "Fast", "Instant"], Array.IndexOf(speeds, s.RangeSpeed),
+                i => Set("range_speed", speeds[i].ToString().ToLowerInvariant()), y, left, right, dim: s.Range != RangeMode.Auto);
             y = Segmented("Units", ["°C", "°F"], s.Units == TempUnits.F ? 1 : 0, i => Set("units", i == 1 ? "F" : "C"), y, left, right);
 
             y = Section("Picture", y, left, right);
@@ -424,11 +427,14 @@ namespace TC001MaxWebcam.Tray
             return y + h;
         }
 
-        private int Segmented(string label, string[] options, int selected, Action<int> click, int y, int left, int right)
+        /// <summary>A label and a row of choices; <paramref name="dim"/> greys it out (it does not
+        /// matter now) but leaves it clickable.</summary>
+        private int Segmented(string label, string[] options, int selected, Action<int> click, int y, int left, int right, bool dim = false)
         {
             var h = Px(36);
             var labelW = Px(76);
-            Text(label, new RECT(left, y, left + labelW, y + h), _t.Text, _font, DT_LEFT | DT_VCENTER);
+            var text = dim ? _t.Disabled : _t.Text;
+            Text(label, new RECT(left, y, left + labelW, y + h), text, _font, DT_LEFT | DT_VCENTER);
             var x0 = left + labelW;
             var bh = Px(28);
             var by = y + (h - bh) / 2;
@@ -446,11 +452,11 @@ namespace TC001MaxWebcam.Tray
                 if (_draw)
                 {
                     if (i == selected)
-                        FillRound(sx + inset, by + inset, ex - sx - 2 * inset, bh - 2 * inset, Px(4), _t.Accent);
+                        FillRound(sx + inset, by + inset, ex - sx - 2 * inset, bh - 2 * inset, Px(4), Fade(_t.Accent, !dim));
                     else if (hovered)
                         FillRound(sx + inset, by + inset, ex - sx - 2 * inset, bh - 2 * inset, Px(4), _t.ControlHover);
                 }
-                Text(options[i], seg, i == selected ? _t.OnAccent : _t.Text, _font, DT_CENTER | DT_VCENTER);
+                Text(options[i], seg, i == selected ? Fade(_t.OnAccent, !dim) : text, _font, DT_CENTER | DT_VCENTER);
             }
             return y + h;
         }

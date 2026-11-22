@@ -84,11 +84,15 @@ namespace TC001MaxWebcam.Core
     /// A calm auto range for live views (port of the original Python RangeSmoother): whole degrees,
     /// no jitter, quick to show a new hot spot. Per frame the target is the 1st percentile of a
     /// 2x-subsampled frame .. the hottest pixel. Widening is immediate; narrowing follows an exponential
-    /// average with time constant tau_s. The shown range is rounded outwards to whole degrees and only
-    /// narrows once it is hysteresis_c wider than needed.
+    /// average with time constant tau_s (<see cref="TauS"/>, the range_speed setting; 0 = at once).
+    /// The shown range is rounded outwards to whole degrees and only narrows once it is
+    /// hysteresis_c wider than needed.
     /// </summary>
     public sealed class RangeSmoother(double tauS = 4.0, double hysteresisC = 1.0, double minSpanC = 5.0)
     {
+        /// <summary>The narrowing time constant in seconds; 0 narrows at once.</summary>
+        public double TauS { get; set; } = tauS;
+
         private (double Lo, double Hi)? _s;
         private (double Lo, double Hi)? _shown;
         private double? _t;
@@ -140,7 +144,7 @@ namespace TC001MaxWebcam.Core
             }
             else
             {
-                var a = 1.0 - Math.Exp(-Math.Max(t - t0, 0.0) / tauS);
+                var a = TauS <= 0 ? 1.0 : 1.0 - Math.Exp(-Math.Max(t - t0, 0.0) / TauS);
                 (sLo, sHi) = s;
                 sLo = tg.Lo < sLo ? tg.Lo : sLo + a * (tg.Lo - sLo);
                 sHi = tg.Hi > sHi ? tg.Hi : sHi + a * (tg.Hi - sHi);

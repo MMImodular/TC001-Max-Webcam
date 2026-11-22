@@ -90,6 +90,7 @@ namespace TC001MaxWebcam.Core
         /// <summary>The colour range for this frame (in display units) under the settings' range mode.</summary>
         private (double Lo, double Hi) Range(WebcamSettings st, float[] temp, int w, int h, double t)
         {
+            Smoother.TauS = st.RangeTauS;
             switch (st.Range)
             {
                 case RangeMode.Manual:

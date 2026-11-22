@@ -36,7 +36,7 @@ spot marked and the temperatures written on the image.
 
 ## Where the project is at
 
-**Version 1.3.2 (November 2026). A personal project that works on the owner's PC. It is offered
+**Version 1.3.3 (November 2026). A personal project that works on the owner's PC. It is offered
 as-is, with no support.**
 
 Tested on real hardware (one TC001 Max, firmware 1.01.000, Windows 11 x64):
@@ -168,7 +168,7 @@ settings; click elsewhere or press Esc to close it. It has:
   temperature readouts (top bar) and the temperature scale (bottom bar);
 - colour palette (a preview of each) and the custom palette's colours: click a colour to change
   it with Windows' colour picker, or use + / − to add or remove one (2 to 5, cold to hot);
-- colour range and units;
+- colour range, how fast the auto range follows the scene, and units;
 - rotate, and mirror left-right or top-bottom;
 - the automatic shutter;
 - *Edit settings file* (for the manual range and the custom palette), *Open log* and *Exit*.
@@ -197,6 +197,7 @@ TC001MaxWebcam settings reset
 | `palette` | `inferno`, `iron`, `rainbow` (Google's turbo), `grey` (white hot), `black_hot`, `custom` | `inferno` |
 | `custom_palette` | 2-5 colours `#rrggbb`, cold to hot | `#000040,#00a0ff,#ffff00,#ff0000` |
 | `range` | `auto`: follows the scene, widens at once and narrows over a few seconds. `locked`: keeps the first frame's auto range. `manual`: uses `range_min`..`range_max`. | `auto` |
+| `range_speed` | `slow`, `normal`, `fast`, `instant`: how fast the auto range narrows after the scene cools (about 25 s, 12 s, 3 s, at once); it always widens at once | `normal` |
 | `range_min`, `range_max` | numbers in `units`, within -100..600 °C | `20`, `40` |
 | `auto_shutter` | `on`, `off`. `off` stops the click, but readings drift and fixed-pattern noise grows over time. | `on` |
 | `idle_auto_shutter` | `off`, `on`, `unchanged`: what the shutter is left at when the camera closes | `off` |

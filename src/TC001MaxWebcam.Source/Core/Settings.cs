@@ -19,6 +19,10 @@
 //                        locked: the auto range of the first frame, held until the stream stops
 //                                or the settings change
 //                        manual: range_min .. range_max
+//   range_speed        slow | normal | fast | instant   how fast the auto range narrows after the
+//                                           scene cools (it always widens at once): about 25 s,
+//                                           12 s, 3 s or the next frame to settle (time constant
+//                                           8, 4, 1, 0 s)
 //   range_min          number, in units
 //   range_max          number, in units (must be above range_min)
 //   auto_shutter       "on" | "off"         the camera's automatic shutter / NUC (about once a
@@ -52,6 +56,9 @@ namespace TC001MaxWebcam.Core
 
     public enum RangeMode { Auto, Locked, Manual }
 
+    /// <summary>How fast the auto range narrows (range_speed).</summary>
+    public enum RangeSpeed { Slow, Normal, Fast, Instant }
+
     /// <summary>A value that cannot be used, with a message for the owner.</summary>
     public sealed class SettingsException(string message) : Exception(message);
 
@@ -66,6 +73,16 @@ namespace TC001MaxWebcam.Core
         public string Palette { get; init; } = "inferno";
         public string[] CustomPalette { get; init; } = ["#000040", "#00a0ff", "#ffff00", "#ff0000"]; // labbench's default
         public RangeMode Range { get; init; } = RangeMode.Auto;
+        public RangeSpeed RangeSpeed { get; init; } = RangeSpeed.Normal;
+
+        /// <summary>The auto range's narrowing time constant in seconds for <see cref="RangeSpeed"/>.</summary>
+        public double RangeTauS => RangeSpeed switch
+        {
+            RangeSpeed.Slow => 8.0,
+            RangeSpeed.Fast => 1.0,
+            RangeSpeed.Instant => 0.0,
+            _ => 4.0,
+        };
         public double RangeMin { get; init; } = 20.0;
         public double RangeMax { get; init; } = 40.0;
         public bool AutoShutter { get; init; } = true;
@@ -117,7 +134,7 @@ namespace TC001MaxWebcam.Core
         public const double MaxC = Tc001Max.CeilingC;
 
         public static readonly string[] Keys =
-            ["rotate", "mirror_horizontal", "mirror_vertical", "units", "palette", "custom_palette", "range", "range_min", "range_max", "auto_shutter", "idle_auto_shutter",
+            ["rotate", "mirror_horizontal", "mirror_vertical", "units", "palette", "custom_palette", "range", "range_speed", "range_min", "range_max", "auto_shutter", "idle_auto_shutter",
              "overlay", "crosshair", "hotspot", "readouts", "scale"];
 
         public static readonly string[] Help =
@@ -131,6 +148,7 @@ namespace TC001MaxWebcam.Core
             "range=auto|locked|manual",
             "range_min=<number>              manual range, in units",
             "range_max=<number>              manual range, in units (above range_min)",
+            "range_speed=slow|normal|fast|instant   how fast the auto range narrows (~25 s, 12 s, 3 s, at once)",
             "auto_shutter=on|off             camera's automatic shutter (off: no click, more drift)",
             "idle_auto_shutter=off|on|unchanged   left so when the webcam closes the camera (default off)",
             "overlay=true|false              false: bare picture, no marks or bars",
@@ -197,6 +215,18 @@ namespace TC001MaxWebcam.Core
                     return s with { RangeMin = Number("range_min", v, s.Units) };
                 case "range_max":
                     return s with { RangeMax = Number("range_max", v, s.Units) };
+                case "range_speed":
+                    return s with
+                    {
+                        RangeSpeed = v.ToLowerInvariant() switch
+                        {
+                            "slow" => RangeSpeed.Slow,
+                            "normal" or "default" => RangeSpeed.Normal,
+                            "fast" => RangeSpeed.Fast,
+                            "instant" or "immediate" => RangeSpeed.Instant,
+                            _ => throw new SettingsException($"range_speed must be slow, normal, fast or instant (got '{value}')"),
+                        },
+                    };
                 case "auto_shutter":
                     return s with
                     {
@@ -410,6 +440,7 @@ namespace TC001MaxWebcam.Core
                 w.WriteString("range", s.Range.ToString().ToLowerInvariant());
                 w.WriteNumber("range_min", s.RangeMin);
                 w.WriteNumber("range_max", s.RangeMax);
+                w.WriteString("range_speed", s.RangeSpeed.ToString().ToLowerInvariant());
                 w.WriteString("auto_shutter", s.AutoShutter ? "on" : "off");
                 w.WriteString("idle_auto_shutter", IdleText(s.IdleAutoShutter));
                 w.WriteBoolean("overlay", s.Overlay);
@@ -525,6 +556,7 @@ namespace TC001MaxWebcam.Core
             $"rotate {s.Rotate}, mirror h {s.MirrorHorizontal} v {s.MirrorVertical}, units {s.Units}, palette {s.Palette}" +
             (s.Palette == "custom" ? $" ({string.Join(" ", s.CustomPalette)})" : "") +
             $", range {s.Range.ToString().ToLowerInvariant()}" +
+            (s.Range == RangeMode.Auto && s.RangeSpeed != RangeSpeed.Normal ? $" ({s.RangeSpeed.ToString().ToLowerInvariant()})" : "") +
             (s.Range == RangeMode.Manual ? $" {s.RangeMin.ToString(CultureInfo.InvariantCulture)} .. {s.RangeMax.ToString(CultureInfo.InvariantCulture)}" : "") +
             $", auto shutter {(s.AutoShutter ? "on" : "off")}, idle {SettingsFile.IdleText(s.IdleAutoShutter)}" +
             (s.Overlay ? Hidden(s) : ", overlay off");
