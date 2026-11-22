@@ -1,0 +1,79 @@
+# Publishes a GitHub release with the installer attached. Run it by hand from the Actions tab
+# (Release > Run workflow, on main) after pushing a commit whose version is new.
+#
+# It reads the version from installer\TC001MaxWebcam.Installer.wixproj, refuses if release
+# v<version> already exists or CHANGELOG.md has no "## <version>" section, then builds with
+# build.ps1 (the self-test first, then the .msi) and publishes release v<version> on the commit it
+# built, with that changelog section and the installer's SHA-256 as the notes.
+# Origin: written for this project.
+
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version, tag and notes
+        id: meta
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $proj = Get-Content installer\TC001MaxWebcam.Installer.wixproj -Raw
+          if ($proj -notmatch '<ProductVersion[^>]*>([0-9.]+)</ProductVersion>') { throw "no ProductVersion in the wixproj" }
+          $version = $Matches[1]
+          $tag = "v$version"
+          if (git tag --list $tag) { throw "tag $tag already exists: bump the version first" }
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) { throw "release $tag already exists: bump the version first" }
+          $lines = Get-Content CHANGELOG.md
+          $start = [array]::IndexOf($lines, "## $version")
+          if ($start -lt 0) { throw "CHANGELOG.md has no '## $version' section" }
+          $section = @()
+          for ($i = $start + 1; $i -lt $lines.Count -and -not $lines[$i].StartsWith('## '); $i++) { $section += $lines[$i] }
+          Set-Content notes.md ($section -join "`n").Trim() -Encoding utf8
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          exit 0  # "gh release view" failing above is the good case: no such release yet
+
+      - name: Build (self-test, then the installer)
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $msi = "TC001MaxWebcam-${{ steps.meta.outputs.version }}-x64.msi"
+          if (-not (Test-Path $msi)) { throw "build.ps1 did not leave $msi" }
+          $sha = (Get-FileHash $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+          $footer = @"
+
+          ---
+
+          **Install:** download ``$msi`` below and double-click it (one administrator prompt).
+          You need Windows 11 x64, the .NET 10 x64 runtime (``winget install Microsoft.DotNet.Runtime.10``)
+          and, once, WinUSB bound to the camera with Zadig. See the [README](https://github.com/${{ github.repository }}#install).
+          To update later, download the newer ``.msi`` and double-click it.
+
+          Built by GitHub Actions from commit ${{ github.sha }}. SHA-256 of the installer: ``$sha``
+          "@
+          Add-Content notes.md $footer -Encoding utf8
+          gh release create "${{ steps.meta.outputs.tag }}" $msi --target "${{ github.sha }}" `
+            --title "TC001 Max Thermal Webcam ${{ steps.meta.outputs.version }}" --notes-file notes.md

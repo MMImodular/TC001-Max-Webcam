@@ -11,7 +11,8 @@
 //   mirror_horizontal  true | false         left-right
 //   mirror_vertical    true | false         top-bottom
 //   units              "C" | "F"            on-image readouts, colour scale and range_min/range_max
-//   palette            inferno | iron | rainbow | grey | custom
+//   palette            inferno | iron | rainbow | grey | black_hot | custom   (labbench's palettes;
+//                                           white_hot = grey, turbo = rainbow also accepted)
 //   custom_palette     2-5 colours "#rrggbb", cold to hot (used when palette is custom)
 //   range              auto | locked | manual
 //                        auto: follows the scene (1st percentile .. hottest pixel, whole degrees)
@@ -29,6 +30,12 @@
 //                                           lends the camera to labbench). off (default, the same as
 //                                           labbench's idle_auto_shutter): no click while nothing
 //                                           streams. The camera keeps the switch until changed.
+//   overlay            true | false         false: the bare false-colour picture, none of the
+//                                           marks below (status badges and cards still show)
+//   crosshair          true | false         the small x at the centre of the picture
+//   hotspot            true | false         the green + on the hottest pixel, with its temperature
+//   readouts           true | false         the top bar: MAX / CENTRE temperatures
+//   scale              true | false         the bottom bar: colour scale, range mode, time, source
 
 using System;
 using System.Collections.Generic;
@@ -57,13 +64,18 @@ namespace TC001MaxWebcam.Core
         public bool MirrorVertical { get; init; }
         public TempUnits Units { get; init; } = TempUnits.C;
         public string Palette { get; init; } = "inferno";
-        public string[] CustomPalette { get; init; } = ["#000000", "#7f00ff", "#ff7f00", "#ffffff"];
+        public string[] CustomPalette { get; init; } = ["#000040", "#00a0ff", "#ffff00", "#ff0000"]; // labbench's default
         public RangeMode Range { get; init; } = RangeMode.Auto;
         public double RangeMin { get; init; } = 20.0;
         public double RangeMax { get; init; } = 40.0;
         public bool AutoShutter { get; init; } = true;
         /// <summary>idle_auto_shutter: false = off (default), true = on, null = unchanged.</summary>
         public bool? IdleAutoShutter { get; init; } = false;
+        public bool Overlay { get; init; } = true;
+        public bool Crosshair { get; init; } = true;
+        public bool HotSpot { get; init; } = true;
+        public bool Readouts { get; init; } = true;
+        public bool Scale { get; init; } = true;
 
         public Orientation Orientation => new(Rotate, MirrorHorizontal, MirrorVertical);
 
@@ -105,7 +117,8 @@ namespace TC001MaxWebcam.Core
         public const double MaxC = Tc001Max.CeilingC;
 
         public static readonly string[] Keys =
-            ["rotate", "mirror_horizontal", "mirror_vertical", "units", "palette", "custom_palette", "range", "range_min", "range_max", "auto_shutter", "idle_auto_shutter"];
+            ["rotate", "mirror_horizontal", "mirror_vertical", "units", "palette", "custom_palette", "range", "range_min", "range_max", "auto_shutter", "idle_auto_shutter",
+             "overlay", "crosshair", "hotspot", "readouts", "scale"];
 
         public static readonly string[] Help =
         [
@@ -113,13 +126,18 @@ namespace TC001MaxWebcam.Core
             "mirror_horizontal=true|false    left-right",
             "mirror_vertical=true|false      top-bottom",
             "units=C|F                       readouts, colour scale, range_min/range_max",
-            "palette=inferno|iron|rainbow|grey|custom",
+            "palette=inferno|iron|rainbow|grey|black_hot|custom",
             "custom_palette=#000000,#ff0000,#ffffff   2-5 colours, cold to hot",
             "range=auto|locked|manual",
             "range_min=<number>              manual range, in units",
             "range_max=<number>              manual range, in units (above range_min)",
             "auto_shutter=on|off             camera's automatic shutter (off: no click, more drift)",
             "idle_auto_shutter=off|on|unchanged   left so when the webcam closes the camera (default off)",
+            "overlay=true|false              false: bare picture, no marks or bars",
+            "crosshair=true|false            centre mark",
+            "hotspot=true|false              hottest-pixel mark and its temperature",
+            "readouts=true|false             top bar: MAX / CENTRE",
+            "scale=true|false                bottom bar: colour scale, range mode, time",
         ];
 
         private static readonly JsonDocumentOptions JsonOptions = new()
@@ -155,8 +173,8 @@ namespace TC001MaxWebcam.Core
                         },
                     };
                 case "palette":
-                    var p = v.ToLowerInvariant() == "gray" ? "grey" : v.ToLowerInvariant();
-                    if (!Palettes.Names.Contains(p))
+                    var p = Palettes.Canonical(v);
+                    if (p == null)
                         throw new SettingsException($"palette must be one of {string.Join(", ", Palettes.Names)} (got '{value}')");
                     return s with { Palette = p };
                 case "custom_palette":
@@ -200,6 +218,16 @@ namespace TC001MaxWebcam.Core
                             _ => throw new SettingsException($"idle_auto_shutter must be off, on or unchanged (got '{value}')"),
                         },
                     };
+                case "overlay":
+                    return s with { Overlay = Bool("overlay", v) };
+                case "crosshair":
+                    return s with { Crosshair = Bool("crosshair", v) };
+                case "hotspot":
+                    return s with { HotSpot = Bool("hotspot", v) };
+                case "readouts":
+                    return s with { Readouts = Bool("readouts", v) };
+                case "scale":
+                    return s with { Scale = Bool("scale", v) };
                 default:
                     throw new SettingsException($"unknown setting '{key}' (known: {string.Join(", ", Keys)})");
             }
@@ -384,6 +412,11 @@ namespace TC001MaxWebcam.Core
                 w.WriteNumber("range_max", s.RangeMax);
                 w.WriteString("auto_shutter", s.AutoShutter ? "on" : "off");
                 w.WriteString("idle_auto_shutter", IdleText(s.IdleAutoShutter));
+                w.WriteBoolean("overlay", s.Overlay);
+                w.WriteBoolean("crosshair", s.Crosshair);
+                w.WriteBoolean("hotspot", s.HotSpot);
+                w.WriteBoolean("readouts", s.Readouts);
+                w.WriteBoolean("scale", s.Scale);
                 w.WriteEndObject();
             }
             return Encoding.UTF8.GetString(ms.ToArray()) + "\n";
@@ -493,7 +526,18 @@ namespace TC001MaxWebcam.Core
             (s.Palette == "custom" ? $" ({string.Join(" ", s.CustomPalette)})" : "") +
             $", range {s.Range.ToString().ToLowerInvariant()}" +
             (s.Range == RangeMode.Manual ? $" {s.RangeMin.ToString(CultureInfo.InvariantCulture)} .. {s.RangeMax.ToString(CultureInfo.InvariantCulture)}" : "") +
-            $", auto shutter {(s.AutoShutter ? "on" : "off")}, idle {SettingsFile.IdleText(s.IdleAutoShutter)}";
+            $", auto shutter {(s.AutoShutter ? "on" : "off")}, idle {SettingsFile.IdleText(s.IdleAutoShutter)}" +
+            (s.Overlay ? Hidden(s) : ", overlay off");
+
+        private static string Hidden(WebcamSettings s)
+        {
+            var off = new List<string>();
+            if (!s.Crosshair) off.Add("crosshair");
+            if (!s.HotSpot) off.Add("hotspot");
+            if (!s.Readouts) off.Add("readouts");
+            if (!s.Scale) off.Add("scale");
+            return off.Count == 0 ? "" : $", hidden: {string.Join(" ", off)}";
+        }
 
         /// <summary>Value equality (the record compares the colour array by reference).</summary>
         public static bool Same(WebcamSettings a, WebcamSettings b) =>

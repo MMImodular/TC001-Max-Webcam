@@ -39,5 +39,12 @@ namespace TC001MaxWebcam
         /// <summary>The media source's own log (rotated at LogMaxBytes to webcam.log.1).</summary>
         public const string LogName = "webcam.log";
         public const long LogMaxBytes = 256 * 1024;
+
+        /// <summary>The notification-area (tray) app, TC001MaxWebcamTray.exe, next to TC001MaxWebcam.exe.
+        /// One per sign-in session (the mutex); setting the event asks it to exit (the updater does so
+        /// before msiexec replaces its files, then starts it again).</summary>
+        public const string TrayExeName = "TC001MaxWebcamTray.exe";
+        public const string TrayMutexName = @"Local\TC001MaxWebcamTray";
+        public const string TrayExitEventName = @"Local\TC001MaxWebcamTray.Exit";
     }
 }

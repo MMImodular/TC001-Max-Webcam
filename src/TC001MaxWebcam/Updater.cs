@@ -16,6 +16,9 @@
 //    again on demand, as install.ps1 -RestartFrameServer does) and runs
 //    msiexec /i <msi> /passive /norestart /l*v %TEMP%\TC001MaxWebcam-update-<version>.log
 //    (a major upgrade: settings, the data folder and the virtual camera stay).
+//    Before msiexec it asks the tray icon (TC001MaxWebcamTray.exe) to exit, so its files are free,
+//    and afterwards starts it again through Explorer, so that it runs as the signed-in user and not
+//    elevated.
 //
 // The decisions are in Core\UpdateRules.cs (checked by the self-test); this file is the Windows side.
 
@@ -175,6 +178,8 @@ namespace TC001MaxWebcam.Cli
             foreach (var service in new[] { "FrameServerMonitor", "FrameServer" })
                 Console.WriteLine($"  {service}: {Services.Stop(service)}");
 
+            var trayWasRunning = StopTray();
+
             var log = Path.Combine(Path.GetTempPath(), $"TC001MaxWebcam-update-{n.Version}.log");
             Console.WriteLine($"  msiexec /i ... /passive (log: {log})");
             var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "msiexec.exe")) { UseShellExecute = false };
@@ -187,7 +192,47 @@ namespace TC001MaxWebcam.Cli
             Console.WriteLine(ok ? $"Done: {text}. Installed now: {InstalledVersion()?.ToString() ?? "?"}." : $"Not updated: {text}. Details: {log}");
             if (ok)
                 Console.WriteLine("Open the camera app again; the settings are unchanged.");
+            if (trayWasRunning)
+                StartTray();
             return ok ? 0 : 1;
+        }
+
+        // -- the tray icon -------------------------------------------------------------------------
+        /// <summary>Asks the tray icon to exit (its exit event) and waits up to 5 s. True if it ran.</summary>
+        private static bool StopTray()
+        {
+            if (!EventWaitHandle.TryOpenExisting(Shared.TrayExitEventName, out var exit))
+                return false;
+            using (exit)
+            {
+                Console.WriteLine("  tray icon: asking it to exit");
+                exit.Set();
+            }
+            var name = Path.GetFileNameWithoutExtension(Shared.TrayExeName);
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < until && Process.GetProcessesByName(name).Length > 0)
+                Thread.Sleep(100);
+            return true;
+        }
+
+        /// <summary>Starts the installed tray icon again. Through explorer.exe, which runs it with the
+        /// signed-in user's own (not elevated) rights, as at sign-in.</summary>
+        private static void StartTray()
+        {
+            var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "TC001MaxWebcam", Shared.TrayExeName);
+            if (!File.Exists(exe))
+                return;
+            try
+            {
+                var psi = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe")) { UseShellExecute = false };
+                psi.ArgumentList.Add(exe);
+                using var _ = Process.Start(psi);
+                Console.WriteLine("  tray icon: started again");
+            }
+            catch (Exception e) when (e is Win32Exception or IOException)
+            {
+                Console.WriteLine($"  tray icon: not started ({e.Message}); it starts at the next sign-in");
+            }
         }
 
         // -- shared helpers ------------------------------------------------------------------------

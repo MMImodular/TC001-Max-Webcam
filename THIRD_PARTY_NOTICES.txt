@@ -66,14 +66,24 @@ src\TC001MaxWebcam.Source\Core\Tc001MaxProtocol.cs: adapted (via the author's Py
 src\TC001MaxWebcam.Source\Core\CameraSession.cs: start and stop sequences adapted from WendyOS
   protocol.go and p3-ir-camera (Apache-2.0); the rest is this project's own.
 src\TC001MaxWebcam.Source\Core\InfernoLut.cs: data from matplotlib's inferno map (CC0).
+src\TC001MaxWebcam.Source\Core\TurboLut.cs: Google's Turbo colour map (Copyright 2019 Google LLC,
+  Apache License 2.0; https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/),
+  generated from matplotlib's copy of it (matplotlib carries Google's Apache-2.0 notice for it).
+  Licence text: LICENSE in this repository (the same Apache License 2.0).
+src\TC001MaxWebcam.Source\Core\Palettes.cs: the iron and black-hot colour stops and the custom
+  palette's default colours are the owner's own, from their unpublished labbench
+  (src/labbench/thermal/view.py), so the two programs show the same colours.
 src\TC001MaxWebcam.Source\Usb\WinUsbLink.cs: this project's own, from Microsoft's documentation;
   it mirrors the behaviour of libusb's WinUSB backend (LGPL-2.1) without its code.
 experiments\cam.py: command bytes from p3-ir-camera (Apache-2.0); crc16_xmodem / vdcmd and the
   auto-FFC ids adapted from thermalmaster (CC0-1.0); imports the author's private BlockParser
   (adapted from WendyOS parser.go, Apache-2.0).
 All other files (Core\CameraClaims.cs, Display.cs, FrameRenderer.cs, Log.cs, Palettes.cs,
-  PixelFont.cs, Settings.cs, UpdateRules.cs, WebcamEngine.cs, src\TC001MaxWebcam\Updater.cs, the
-  installer, scripts, tests, experiments\stalls and run_*.py): written for this project.
+  PixelFont.cs, Settings.cs, TrayArt.cs, UpdateRules.cs, WebcamEngine.cs,
+  src\TC001MaxWebcam\Updater.cs, src\TC001MaxWebcam.Tray\*.cs (the tray icon, written from
+  Microsoft's Win32 documentation), the installer, scripts, .github\workflows (GitHub Actions;
+  they use GitHub's own actions checkout, setup-dotnet and upload-artifact, MIT, run by GitHub
+  and not shipped), tests, experiments\stalls and run_*.py): written for this project.
   Display.cs ports the author's own unpublished Python code.
 All of the code in this repository, including what is adapted above, was written by Claude
 (Anthropic's AI model) in Claude Code, directed and reviewed by the repository owner.

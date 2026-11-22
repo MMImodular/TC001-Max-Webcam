@@ -26,15 +26,17 @@ spot marked and the temperatures written on the image.
   - `MAX` / `CENTRE` readouts;
   - the colour scale, the range mode and the time.
 - Settings in a small `settings.json` apply while streaming: rotation, mirroring, °C / °F,
-  palette (inferno, iron, rainbow, grey, custom) and range (auto, locked, manual). You can also
-  turn off the camera's automatic shutter.
+  palette (inferno, iron, rainbow, white hot, black hot, custom: the same as labbench), range (auto, locked, manual) and which marks are
+  drawn on the picture. You can also turn off the camera's automatic shutter.
+- A tray icon (the notification area by the clock) opens a small settings window that stays
+  open while you change things.
 - It has a native `.msi` installer and a one-click updater.
 - A small file-based "claims" protocol (`Core/CameraClaims.cs`) lets the owner's private lab
   software take turns with the webcam on the camera. The webcam works without it.
 
 ## Where the project is at
 
-**Version 1.2.0 (November 2026). A personal project that works on the owner's PC. It is offered
+**Version 1.3.2 (November 2026). A personal project that works on the owner's PC. It is offered
 as-is, with no support.**
 
 Tested on real hardware (one TC001 Max, firmware 1.01.000, Windows 11 x64):
@@ -76,11 +78,13 @@ each fact, and `docs/STATE_OF_THE_ART.md` surveys what was publicly known.
 | [danjulio/iCam](https://github.com/danjulio/iCam) (InfiRay Tiny1-C SDK documents) | Background on how InfiRay cores store shutter settings. No code or commands from it. | vendor SDK |
 | [leswright1977/PyThermalCamera](https://github.com/leswright1977/PyThermalCamera) | The frame layout of the original TC001, which TC001 Max blocks resemble. No code from it. | Apache-2.0 |
 | matplotlib "inferno" colour map | The default palette data (`InfernoLut.cs`) | CC0 |
+| [Google's Turbo colour map](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) | The rainbow palette data (`TurboLut.cs`, generated from matplotlib's copy) | Apache-2.0, Google LLC |
 | [WiX Toolset](https://wixtoolset.org) 5 | Builds the `.msi`. It is a build tool; its standard dialogs and custom actions are in the package. | MS-RL |
 | [Zadig](https://zadig.akeo.ie/) | Binding WinUSB to the camera. A tool you run; not included. | GPL-3.0 |
 
-Everything else was written for this project. Some of it is a port of the owner's own,
-unpublished Python driver, which was itself written from the sources above; ported code is
+Everything else was written for this project. The iron and black-hot palettes and the custom
+palette's default colours match the owner's own, unpublished lab software (labbench), so both
+show the same colours. Some of the code is a port of the owner's own, unpublished Python driver, which was itself written from the sources above; ported code is
 therefore attributed to those sources. `THIRD_PARTY_NOTICES.txt` lists the origin of every file,
 with the licence texts.
 
@@ -108,7 +112,12 @@ with the licence texts.
 
    To undo it: Device Manager > the camera > *Uninstall device*, tick *Attempt to remove the
    driver*, then replug the camera.
-2. **Build (no admin).** On the first build, NuGet downloads DirectNCore and WiX.
+2. **Get the installer.** Download `TC001MaxWebcam-<version>-x64.msi` from the newest
+   [release](https://github.com/MMImodular/TC001-Max-Webcam/releases/latest). GitHub builds each
+   release from the source in this repository (`.github/workflows/release.yml`); the release notes
+   give the installer's SHA-256.
+
+   Or build it yourself (no admin). On the first build, NuGet downloads DirectNCore and WiX.
 
    ```powershell
    git clone https://github.com/MMImodular/TC001-Max-Webcam.git C:\src\TC001-Max-Webcam
@@ -126,7 +135,8 @@ with the licence texts.
    - creates `C:\ProgramData\TC001MaxWebcam\` for the settings and the log;
    - registers the media source;
    - creates the virtual camera for all users;
-   - adds *status* and *Update* shortcuts to the Start menu.
+   - adds *settings*, *status* and *Update* shortcuts to the Start menu;
+   - starts the tray icon at every sign-in, and offers to start it now on its last page.
 
    Silent install, from an elevated prompt:
    `msiexec /i TC001MaxWebcam-<version>-x64.msi /qn /l*v install.log`. `install.ps1` and
@@ -148,14 +158,34 @@ Device* at 640x480.
 ## Settings
 
 The settings are in `C:\ProgramData\TC001MaxWebcam\settings.json`. Changes apply within about a
-second, even while streaming. Use the tool, which validates every value, or edit the file by
-hand.
+second, even while streaming.
+
+**The tray icon** is the easy way. Click the thermal icon in the notification area (it may be
+under the ^ arrow). A small window opens above it and stays open while you change several
+settings; click elsewhere or press Esc to close it. It has:
+
+- the overlay switches: the whole overlay, the centre crosshair, the hot-spot marker, the
+  temperature readouts (top bar) and the temperature scale (bottom bar);
+- colour palette (a preview of each) and the custom palette's colours: click a colour to change
+  it with Windows' colour picker, or use + / − to add or remove one (2 to 5, cold to hot);
+- colour range and units;
+- rotate, and mirror left-right or top-bottom;
+- the automatic shutter;
+- *Edit settings file* (for the manual range and the custom palette), *Open log* and *Exit*.
+
+Right-click the icon for a short menu with the same last three. The window follows Windows' light
+or dark mode, and the icon takes the colours of the current palette. If you exit it, start it
+again from *Start menu > TC001 Max Thermal Webcam settings*; it also starts at every sign-in.
+
+You can also use the command-line tool, which validates every value, or edit the file by hand.
 
 ```powershell
 TC001MaxWebcam settings                                  # show the current settings
 TC001MaxWebcam settings set rotate=180 mirror_horizontal=true
 TC001MaxWebcam settings set units=F palette=iron
 TC001MaxWebcam settings set range=manual range_min=20 range_max=45
+TC001MaxWebcam settings set overlay=false                # the bare thermal picture
+TC001MaxWebcam settings set crosshair=false scale=false
 TC001MaxWebcam settings reset
 ```
 
@@ -164,21 +194,28 @@ TC001MaxWebcam settings reset
 | `rotate` | `0`, `90`, `180`, `270`: clockwise, before mirroring; 90 and 270 are letterboxed | `0` |
 | `mirror_horizontal`, `mirror_vertical` | `true`, `false` | `false` |
 | `units` | `C`, `F` | `C` |
-| `palette` | `inferno`, `iron`, `rainbow`, `grey`, `custom` | `inferno` |
-| `custom_palette` | 2-5 colours `#rrggbb`, cold to hot | `#000000,#7f00ff,#ff7f00,#ffffff` |
+| `palette` | `inferno`, `iron`, `rainbow` (Google's turbo), `grey` (white hot), `black_hot`, `custom` | `inferno` |
+| `custom_palette` | 2-5 colours `#rrggbb`, cold to hot | `#000040,#00a0ff,#ffff00,#ff0000` |
 | `range` | `auto`: follows the scene, widens at once and narrows over a few seconds. `locked`: keeps the first frame's auto range. `manual`: uses `range_min`..`range_max`. | `auto` |
 | `range_min`, `range_max` | numbers in `units`, within -100..600 °C | `20`, `40` |
 | `auto_shutter` | `on`, `off`. `off` stops the click, but readings drift and fixed-pattern noise grows over time. | `on` |
 | `idle_auto_shutter` | `off`, `on`, `unchanged`: what the shutter is left at when the camera closes | `off` |
+| `overlay` | `true`, `false`: `false` hides every mark and bar below (status badges still show) | `true` |
+| `crosshair` | `true`, `false`: the small x at the centre | `true` |
+| `hotspot` | `true`, `false`: the green + on the hottest pixel, with its temperature | `true` |
+| `readouts` | `true`, `false`: the top bar, `MAX` / `CENTRE` | `true` |
+| `scale` | `true`, `false`: the bottom bar, the colour scale, range mode and time | `true` |
 
 The `auto_shutter` command was found by experiment (`experiments/LOG.md`). TOPDON does not
 document it.
 
 ## Update and uninstall
 
-- **Update:** after a new build, use *Start menu > Update TC001 Max Thermal Webcam*, or run
-  `TC001MaxWebcam update`. It installs the newest `.msi` in the folder the current version was
-  installed from:
+- **Update:** download the newer `.msi` from
+  [Releases](https://github.com/MMImodular/TC001-Max-Webcam/releases) and double-click it.
+  Or, after a new build or download into the same folder, use *Start menu > Update TC001 Max
+  Thermal Webcam*, or run `TC001MaxWebcam update`. It installs the newest `.msi` in the folder the
+  current version was installed from:
   - it waits until no app is streaming, then asks once for admin rights;
   - `--from <folder>` looks in another folder;
   - `--check` only reports whether an update is available.
@@ -220,8 +257,11 @@ The log is `C:\ProgramData\TC001MaxWebcam\webcam.log`.
 |---|---|
 | `src/TC001MaxWebcam.Source/` | The media source DLL. `Core/` is pure code shared with the self-test: protocol, reader state machine, settings, palettes, renderer and update rules. `Usb/` holds the WinUSB P/Invoke. The rest is the Media Foundation plumbing adapted from VCamNetSample. |
 | `src/TC001MaxWebcam/` | `TC001MaxWebcam.exe`: `install`, `uninstall`, `status`, `run`, `settings`, `update`. |
+| `src/TC001MaxWebcam.Tray/` | `TC001MaxWebcamTray.exe`: the tray icon and its settings window (plain Win32, no extra runtime). |
 | `installer/` | The WiX v5 `.msi` package. |
 | `tests/` | The console self-test, and real camera captures used as fixtures. |
 | `docs/` | `PROTOCOL.md` (the USB protocol, with sources), `STATE_OF_THE_ART.md`. |
 | `experiments/` | The Python experiments behind the auto-shutter and stall findings, with their logs. Not shipped. |
 | `build.ps1`, `install.ps1`, `uninstall.ps1` | The build script, and the scripted install and uninstall. |
+| `.github/workflows/` | GitHub Actions: `build.yml` builds and tests every push; `release.yml` (run by hand) publishes a release with the `.msi`. |
+| `CHANGELOG.md` | What changed in each version; each section becomes that release's notes. |

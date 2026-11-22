@@ -19,10 +19,14 @@
    5. The virtual camera: "TC001MaxWebcam.exe install" (MFCreateVirtualCamera, system lifetime, all
       users), run as LocalSystem after the files and registry are in place; its output goes to the
       Windows Installer log. Uninstall runs "TC001MaxWebcam.exe uninstall" first.
-   6. Updates: HKLM\SOFTWARE\TC001MaxWebcam InstalledFrom = the path of the .msi that installed this
+  6. Updates: HKLM\SOFTWARE\TC001MaxWebcam InstalledFrom = the path of the .msi that installed this
       version (OriginalDatabase), so that "TC001MaxWebcam update" (the Start-menu "Update" shortcut)
       looks for newer builds in the same folder (src\TC001MaxWebcam\Updater.cs). A newer .msi is a
       major upgrade: settings, the data folder and the virtual camera stay.
+  7. The tray icon (TC001MaxWebcamTray.exe, the settings menu): started at every sign-in by an
+      HKLM Run value, offered on the installer's last page, and in the Start menu. Restart Manager
+      closes it while its files are replaced (it answers the session-end messages and registers for
+      restart), and "TC001MaxWebcam update" stops it before msiexec and starts it again after.
   Checked before anything changes: 64-bit Windows and the .NET 10 x64 runtime (Microsoft.NETCore.App
   10.x in C:\Program Files\dotnet; the media source is loaded into a Windows service, so a per-user
   runtime does not work). Not done here: the WinUSB driver for the camera (Zadig, README Step 1).
@@ -97,8 +101,14 @@
 
     <!-- UI: welcome, ready, progress, finish (no licence page: none has been chosen yet) ===== -->
     <UIRef Id="TC001MaxWebcamUI" />
+    <!-- the last page offers to start the tray icon now (WixShellExec runs it from the installer's
+         own, not elevated, process, so it runs as you) -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start the tray icon (settings menu) now" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#TC001MaxWebcamTray.exe]" />
+    <CustomAction Id="LaunchTray" BinaryRef="Wix4UtilCA_X64" DllEntry="WixShellExec" Impersonate="yes" Return="ignore" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
-              Value="Open the Camera app (or Teams, Zoom, OBS) and pick 'TC001 Max Thermal Webcam'. If the picture says 'No thermal camera ... no WinUSB driver', bind WinUSB to the camera once with Zadig (README, Step 1). labbench takes the camera when it needs it and gives it back. Settings: TC001MaxWebcam settings (in a new terminal)." />
+              Value="Open the Camera app (or Teams, Zoom, OBS) and pick 'TC001 Max Thermal Webcam'. If the picture says 'No thermal camera ... no WinUSB driver', bind WinUSB to the camera once with Zadig (README, Step 1). labbench takes the camera when it needs it and gives it back. Settings: the tray icon's menu, or TC001MaxWebcam settings (in a new terminal)." />
   </Package>
 
   <!-- 1. program files ==================================================================== -->
@@ -124,6 +134,12 @@
           <RegistryValue Name="Version" Type="string" Value="[ProductVersion]" />
         </RegistryKey>
       </Component>
+      <!-- 7. the tray icon, started at sign-in for every user -->
+      <Component Id="Tray" Bitness="always64">
+        <File Id="TC001MaxWebcamTray.exe" Source="$(var.PublishDir)TC001MaxWebcamTray.exe" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" Name="TC001MaxWebcamTray"
+                       Type="string" Value="&quot;[#TC001MaxWebcamTray.exe]&quot;" />
+      </Component>
       <Component Id="Docs" Bitness="always64">
         <File Id="README.md" Source="$(var.RepoDir)README.md" KeyPath="yes" />
       </Component>
@@ -132,6 +148,7 @@
       <Files Include="$(var.PublishDir)**">
         <Exclude Files="$(var.PublishDir)TC001MaxWebcamSource.comhost.dll" />
         <Exclude Files="$(var.PublishDir)TC001MaxWebcam.exe" />
+        <Exclude Files="$(var.PublishDir)TC001MaxWebcamTray.exe" />
         <Exclude Files="$(var.PublishDir)**\*.pdb" />
       </Files>
     </ComponentGroup>
@@ -166,6 +183,10 @@
                 Description="Installation, settings, camera claims, log and USB device (read-only; the camera is not opened)"
                 Target="[System64Folder]cmd.exe"
                 Arguments="/k &quot;&quot;[INSTALLFOLDER]TC001MaxWebcam.exe&quot; status &amp; echo. &amp; &quot;[INSTALLFOLDER]TC001MaxWebcam.exe&quot; help&quot;"
+                WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="TrayShortcut" Name="TC001 Max Thermal Webcam settings"
+                Description="The tray icon and its settings window: palette, overlay, range, units, rotation and mirroring, applied while streaming"
+                Target="[INSTALLFOLDER]TC001MaxWebcamTray.exe"
                 WorkingDirectory="INSTALLFOLDER" />
       <Shortcut Id="UpdateShortcut" Name="Update TC001 Max Thermal Webcam"
                 Description="Install a newer build from the folder this one was installed from (one administrator prompt; waits until no app uses the webcam)"
@@ -203,6 +224,8 @@
       <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
       <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
       <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchTray"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
       <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
     </UI>
     <UIRef Id="WixUI_Common" />

@@ -5,8 +5,9 @@
 // locked: the first frame's auto range, held; manual: range_min .. range_max), rotated and mirrored
 // as the settings say, a green + with its temperature on the hottest pixel, a small x at the centre,
 // max / centre / hot-spot temperatures, the colour scale, the time, and a calm badge while the
-// camera calibrates. All readouts are in the settings' units. Cards (no camera, camera in use, ...)
-// are drawn with the same pixel font.
+// camera calibrates. The settings' overlay switches hide the marks and bars (overlay=false hides
+// them all); the badge always shows. All readouts are in the settings' units. Cards (no camera,
+// camera in use, ...) are drawn with the same pixel font.
 
 using System;
 using System.Collections.Generic;
@@ -132,12 +133,17 @@ namespace TC001MaxWebcam.Core
 
             (double X, double Y) ToPx(double x, double y) => (x0 + (x + 0.5) * s, y0 + (y + 0.5) * s);
 
+            var overlay = st.Overlay;
+
             // centre marker
-            var (cx, cy) = ToPx(dw / 2, dh / 2);
-            for (var d = -5; d <= 5; d++)
+            if (overlay && st.Crosshair)
             {
-                Put(bgra, (int)cx + d, (int)cy + d, 255, 255, 255);
-                Put(bgra, (int)cx + d, (int)cy - d, 255, 255, 255);
+                var (cx, cy) = ToPx(dw / 2, dh / 2);
+                for (var d = -5; d <= 5; d++)
+                {
+                    Put(bgra, (int)cx + d, (int)cy + d, 255, 255, 255);
+                    Put(bgra, (int)cx + d, (int)cy - d, 255, 255, 255);
+                }
             }
 
             // statistics in sensor orientation
@@ -151,7 +157,7 @@ namespace TC001MaxWebcam.Core
             float? hotV = hottest >= 0 ? temp[hottest] : null;
 
             LastHotSpotPx = null;
-            if (hottest >= 0)
+            if (hottest >= 0 && overlay && st.HotSpot)
             {
                 var (X, Y) = o.ToDisplay(hottest % sw, hottest / sw, sw, sh);
                 var (pxd, pyd) = ToPx(X, Y);
@@ -168,10 +174,31 @@ namespace TC001MaxWebcam.Core
             }
 
             // top bar: temperatures
-            Fill(bgra, 0, 0, OutW, 30, 0, 0, 0, 150);
-            Text(bgra, 8, 8, $"MAX {Fmt(float.IsFinite(max) ? max : null, unit)}  CENTRE {Fmt(float.IsFinite(centre) ? centre : null, unit)}",
-                 2, 255, 255, 255, outline: false);
+            if (overlay && st.Readouts)
+            {
+                Fill(bgra, 0, 0, OutW, 30, 0, 0, 0, 150);
+                Text(bgra, 8, 8, $"MAX {Fmt(float.IsFinite(max) ? max : null, unit)}  CENTRE {Fmt(float.IsFinite(centre) ? centre : null, unit)}",
+                     2, 255, 255, 255, outline: false);
+            }
+            if (overlay && st.Scale)
+                DrawScaleBar(bgra, pic, st, lut, lo, hi, unit);
 
+            if (pic.Badge != null)
+            {
+                var text = PixelFont.Normalise(pic.Badge);
+                var w = PixelFont.Measure(text, 3) + 24;
+                var bh = PixelFont.Height(3) + 18;
+                int bx = (OutW - w) / 2, by = (OutH - bh) / 2;
+                if (pic.BadgeCalm)
+                    Fill(bgra, bx, by, w, bh, 230, 150, 0, 230);
+                else
+                    Fill(bgra, bx, by, w, bh, 110, 110, 120, 230);
+                Text(bgra, bx + 12, by + 9, text, 3, 0, 0, 0, outline: false);
+            }
+        }
+
+        private static void DrawScaleBar(byte[] bgra, Picture pic, WebcamSettings st, byte[] lut, double lo, double hi, string unit)
+        {
             // bottom bar: colour scale, range mode, time, source
             const int barY = OutH - 26;
             Fill(bgra, 0, barY, OutW, 26, 0, 0, 0, 150);
@@ -200,19 +227,6 @@ namespace TC001MaxWebcam.Core
             {
                 var src = PixelFont.Normalise(pic.Source);
                 Text(bgra, OutW - 6 - PixelFont.Measure(src, 1), barY + 10, src, 1, 200, 200, 200, outline: false);
-            }
-
-            if (pic.Badge != null)
-            {
-                var text = PixelFont.Normalise(pic.Badge);
-                var w = PixelFont.Measure(text, 3) + 24;
-                var bh = PixelFont.Height(3) + 18;
-                int bx = (OutW - w) / 2, by = (OutH - bh) / 2;
-                if (pic.BadgeCalm)
-                    Fill(bgra, bx, by, w, bh, 230, 150, 0, 230);
-                else
-                    Fill(bgra, bx, by, w, bh, 110, 110, 120, 230);
-                Text(bgra, bx + 12, by + 9, text, 3, 0, 0, 0, outline: false);
             }
         }
 

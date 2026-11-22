@@ -1,9 +1,11 @@
 // TC001 Max Thermal Webcam: false-colour palettes, each a 256-entry R, G, B table (pure code).
 //
-// inferno is matplotlib's map (InfernoLut.cs, CC0). iron, rainbow and grey are this project's own
-// colour stops, and custom uses the owner's 2-5 stops from settings.json: the stops are spread
-// evenly from index 0 (coldest) to 255 (hottest) and the colours in between are interpolated
-// linearly in RGB, rounded to the nearest integer.
+// The same palettes as the owner's labbench (src/labbench/thermal/view.py, unpublished), so the
+// webcam and labbench show the same colours: inferno is matplotlib's map (InfernoLut.cs, CC0);
+// rainbow is Google's turbo map (TurboLut.cs, Apache-2.0); iron's colour stops and the
+// black-hot palette come from labbench; grey is labbench's "white hot". custom uses the owner's
+// 2-5 stops from settings.json. Stops are spread evenly from index 0 (coldest) to 255 (hottest)
+// and the colours in between are interpolated linearly in RGB, rounded to the nearest integer.
 
 using System;
 using System.Collections.Generic;
@@ -14,14 +16,39 @@ namespace TC001MaxWebcam.Core
 {
     public static class Palettes
     {
-        public static readonly string[] Names = ["inferno", "iron", "rainbow", "grey", "custom"];
+        public static readonly string[] Names = ["inferno", "iron", "rainbow", "grey", "black_hot", "custom"];
 
-        /// <summary>Colour stops of the built-in palettes other than inferno (cold to hot).</summary>
+        /// <summary>Colour stops of the built-in palettes other than inferno and rainbow (tables),
+        /// cold to hot. All from labbench.</summary>
         public static readonly IReadOnlyDictionary<string, string[]> Presets = new Dictionary<string, string[]>
         {
-            ["iron"] = ["#000000", "#20007a", "#8a0e8f", "#e2441c", "#fbb316", "#ffffff"],
-            ["rainbow"] = ["#000080", "#0000ff", "#00ffff", "#00ff00", "#ffff00", "#ff0000"],
+            ["iron"] = ["#000000", "#20008c", "#9b009b", "#e1301e", "#ff9600", "#ffe650", "#ffffff"],
             ["grey"] = ["#000000", "#ffffff"],
+            ["black_hot"] = ["#ffffff", "#000000"],
+        };
+
+        /// <summary>The name people see (the setting keeps the short name).</summary>
+        public static string Label(string name) => name switch
+        {
+            "inferno" => "Inferno",
+            "iron" => "Iron",
+            "rainbow" => "Rainbow",
+            "grey" => "White hot",
+            "black_hot" => "Black hot",
+            "custom" => "Custom",
+            _ => name,
+        };
+
+        /// <summary>A palette name as typed (any case; labbench's and other common names too) to
+        /// its setting name, or null if unknown.</summary>
+        public static string? Canonical(string text) => text.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_') switch
+        {
+            "grey" or "gray" or "white_hot" or "whitehot" => "grey",
+            "black_hot" or "blackhot" => "black_hot",
+            "rainbow" or "turbo" => "rainbow",
+            "iron" or "ironbow" => "iron",
+            var n when Names.Contains(n) => n,
+            _ => null,
         };
 
         private static readonly Dictionary<string, byte[]> Cache = [];
@@ -31,6 +58,8 @@ namespace TC001MaxWebcam.Core
         {
             if (s.Palette == "inferno")
                 return InfernoLut.Rgb;
+            if (s.Palette == "rainbow")
+                return TurboLut.Rgb;
             var stops = s.Palette == "custom" ? s.CustomPalette
                 : Presets.TryGetValue(s.Palette, out var p) ? p : null;
             if (stops == null)

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	TC001MaxWebcamTray.exe: the notification-area (tray) icon. Clicking it opens a small settings
+	window that changes settings.json (palette, overlay marks, range, units, rotation, mirroring,
+	shutter), and the webcam applies each change within about a second, even while streaming.
+	Plain Win32 through P/Invoke (no WinForms or WPF), so it needs only the .NET 10 runtime the
+	webcam already needs. Written for this project. Framework-dependent (.NET 10).
+	-->
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<AssemblyName>TC001MaxWebcamTray</AssemblyName>
+		<RootNamespace>TC001MaxWebcam.Tray</RootNamespace>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<Platforms>x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+		<Version>1.3.2</Version>
+		<Product>TC001 Max Thermal Webcam</Product>
+		<Description>TC001 Max Thermal Webcam tray icon (settings menu)</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Include="..\TC001MaxWebcam.Source\Shared.cs" Link="Shared.cs" />
+		<!-- settings (read, validate, write) and the palettes, pure code shared with the webcam -->
+		<Compile Include="..\TC001MaxWebcam.Source\Core\*.cs" LinkBase="Core" />
+	</ItemGroup>
+
+</Project>

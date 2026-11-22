@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-  Builds the TC001 Max Thermal Webcam (media source COM DLL + TC001MaxWebcam.exe) after running
-  its self-test.
+  Builds the TC001 Max Thermal Webcam (media source COM DLL, TC001MaxWebcam.exe and the tray icon
+  TC001MaxWebcamTray.exe) after running its self-test.
 
 .DESCRIPTION
   Needs the .NET 10 SDK (winget install Microsoft.DotNet.SDK.10). No admin rights; changes
@@ -49,7 +49,7 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { Write-Error "TC001MaxWebcam.Tests failed (exit $LASTEXITCODE)"; exit 1 }
 }
 
-foreach ($project in @("src\TC001MaxWebcam.Source\TC001MaxWebcam.Source.csproj", "src\TC001MaxWebcam\TC001MaxWebcam.csproj")) {
+foreach ($project in @("src\TC001MaxWebcam.Source\TC001MaxWebcam.Source.csproj", "src\TC001MaxWebcam\TC001MaxWebcam.csproj", "src\TC001MaxWebcam.Tray\TC001MaxWebcam.Tray.csproj")) {
     Write-Host "dotnet publish $project -> $out"
     & $dotnet publish (Join-Path $root $project) -c $Configuration -r win-x64 --self-contained false -o $out -nologo
     if ($LASTEXITCODE -ne 0) { Write-Error "dotnet publish failed for $project"; exit 1 }

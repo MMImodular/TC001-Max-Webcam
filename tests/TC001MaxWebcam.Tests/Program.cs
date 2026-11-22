@@ -690,6 +690,27 @@ namespace TC001MaxWebcam.Tests
                 Check(SettingsWatcher.Describe(d).EndsWith("idle off"), SettingsWatcher.Describe(d));
                 Check(SettingsFile.Help.Any(h => h.StartsWith("idle_auto_shutter=")), "help line");
             });
+            yield return ("settings: overlay, crosshair, hotspot, readouts, scale", () =>
+            {
+                var d = WebcamSettings.Default;
+                Check(d.Overlay && d.Crosshair && d.HotSpot && d.Readouts && d.Scale, "all shown by default");
+                var json = SettingsFile.ToJson(d);
+                foreach (var k in new[] { "overlay", "crosshair", "hotspot", "readouts", "scale" })
+                {
+                    Check(json.Contains($"\"{k}\": true"), $"{k} written");
+                    Check(SettingsFile.Help.Any(h => h.StartsWith(k + "=")), $"{k} help line");
+                }
+                var s = SettingsFile.Apply(d, ["overlay=off", "crosshair=false", "hotspot=no", "readouts=0", "scale=false"]);
+                Check(!s.Overlay && !s.Crosshair && !s.HotSpot && !s.Readouts && !s.Scale, "all off");
+                Check(SettingsWatcher.Same(Parse(SettingsFile.ToJson(s), out var problems), s) && problems.Count == 0, "round trip");
+                Check(!SettingsWatcher.Same(s, d), "a change is a change");
+                Check(SettingsWatcher.Describe(s).EndsWith("overlay off"), SettingsWatcher.Describe(s));
+                Check(SettingsWatcher.Describe(d with { Crosshair = false, Scale = false }).EndsWith("hidden: crosshair scale"), "describe hidden");
+                Check(!SettingsWatcher.Describe(d).Contains("hidden"), "describe defaults");
+                var old = Parse("{\"rotate\": 90}", out problems);
+                Check(old.Overlay && old.Scale && problems.Count == 0, "an older file shows everything");
+                Throws<SettingsException>(() => SettingsFile.Apply(d, ["scale=maybe"]), "bool");
+            });
             yield return ("settings set: units change converts the manual range", () =>
             {
                 var c = WebcamSettings.Default with { Range = RangeMode.Manual, RangeMin = 20, RangeMax = 37 };
@@ -791,6 +812,27 @@ namespace TC001MaxWebcam.Tests
                 foreach (var bad in new[] { "#ff880", "#gg8800", "ff88001", "", "#", "red", "+12345" })
                     Throws<SettingsException>(() => Palettes.ParseHex(bad), $"'{bad}'");
             });
+            yield return ("palettes: labbench's set (iron, turbo rainbow, white / black hot, names)", () =>
+            {
+                Eq(string.Join(",", Palettes.Names), "inferno,iron,rainbow,grey,black_hot,custom", "names");
+                Eq(string.Join(",", Palettes.Presets["iron"]), "#000000,#20008c,#9b009b,#e1301e,#ff9600,#ffe650,#ffffff", "labbench's iron");
+                Check(ReferenceEquals(Palettes.Lut(WebcamSettings.Default with { Palette = "rainbow" }), TurboLut.Rgb), "rainbow is turbo");
+                Eq(TurboLut.Rgb.Length, 768, "turbo size");
+                Eq((TurboLut.Rgb[0], TurboLut.Rgb[1], TurboLut.Rgb[2]), ((byte)48, (byte)18, (byte)59), "turbo 0 (matplotlib, truncated)");
+                Eq((TurboLut.Rgb[384], TurboLut.Rgb[385], TurboLut.Rgb[386]), ((byte)164, (byte)252, (byte)59), "turbo 128");
+                Eq((TurboLut.Rgb[765], TurboLut.Rgb[766], TurboLut.Rgb[767]), ((byte)122, (byte)4, (byte)2), "turbo 255");
+                var black = Palettes.Lut(WebcamSettings.Default with { Palette = "black_hot" });
+                for (var i = 0; i < 256; i++)
+                    Check(black[3 * i] == 255 - i && black[3 * i + 2] == 255 - i, $"black hot {i}");
+                foreach (var (typed, want) in new[] { ("white_hot", "grey"), ("White hot", "grey"), ("GRAY", "grey"), ("black-hot", "black_hot"),
+                                                      ("turbo", "rainbow"), ("Iron", "iron"), ("custom", "custom") })
+                    Eq(SettingsFile.Apply(WebcamSettings.Default, [$"palette={typed}"]).Palette, want, typed);
+                Throws<SettingsException>(() => SettingsFile.Apply(WebcamSettings.Default, ["palette=jet"]), "unknown");
+                Eq(Palettes.Label("grey") + "|" + Palettes.Label("black_hot"), "White hot|Black hot", "labels");
+                Eq(string.Join(",", WebcamSettings.Default.CustomPalette), "#000040,#00a0ff,#ffff00,#ff0000", "labbench's default custom");
+                var both = SettingsFile.Apply(WebcamSettings.Default, ["palette=custom", "custom_palette=#112233,#AABBCC,#ffffff"]);
+                Eq((both.Palette, string.Join(",", both.CustomPalette)), ("custom", "#112233,#aabbcc,#ffffff"), "the tray sets both at once");
+            });
             yield return ("palettes: custom stops are spread evenly and interpolated", () =>
             {
                 var two = Palettes.Lut(WebcamSettings.Default with { Palette = "custom", CustomPalette = ["#000000", "#ffffff"] });
@@ -846,6 +888,64 @@ namespace TC001MaxWebcam.Tests
                 Eq(r.LastRange, (25.0, 60.0), "range");
                 Eq(r.LastHotSpotPx, ((int, int)?)(501, 101), "hot spot");
                 Eq(PixelAt(bgra, 501, 101), ((byte)0, (byte)255, (byte)96), "green marker");
+            });
+            yield return ("renderer: overlay switches hide the marks and bars, not the badge", () =>
+            {
+                var grey = WebcamSettings.Default with { Palette = "grey", Range = RangeMode.Manual, RangeMin = 20, RangeMax = 30 };
+                var plain = ((byte)127, (byte)127, (byte)127); // 25 degC on a 20..30 grey scale
+                (FrameRenderer R, byte[] Px) Draw(WebcamSettings st, string? badge = null)
+                {
+                    var r = new FrameRenderer();
+                    var bgra = new byte[FrameRenderer.OutBytes];
+                    r.Render(new Picture { Kind = PictureKind.Live, Version = 1, Temperature = HotFrame(), Width = 256, Height = 192, Settings = st, TWall = 1.8e9, Badge = badge }, bgra);
+                    return (r, bgra);
+                }
+                var (on, all) = Draw(grey);
+                Check(PixelAt(all, 4, 4) != plain, "readouts bar drawn");
+                Check(PixelAt(all, 4, 470) != plain, "scale bar drawn");
+                Eq(PixelAt(all, 321, 241), ((byte)255, (byte)255, (byte)255), "centre x drawn");
+                Check(on.LastHotSpotPx != null, "hot spot drawn");
+
+                var (offR, off) = Draw(grey with { Overlay = false });
+                Eq(offR.LastHotSpotPx, ((int, int)?)null, "overlay off: no hot spot");
+                foreach (var (x, y) in new[] { (4, 4), (4, 470), (321, 241), (100, 240) })
+                    Eq(PixelAt(off, x, y), plain, $"overlay off: bare picture at ({x}, {y})");
+                Eq(PixelAt(off, 501, 101), ((byte)255, (byte)255, (byte)255), "overlay off: the hot pixel itself still shows");
+
+                Eq(PixelAt(Draw(grey with { Readouts = false }).Px, 4, 4), plain, "readouts off");
+                Check(PixelAt(Draw(grey with { Readouts = false }).Px, 4, 470) != plain, "readouts off: scale stays");
+                Eq(PixelAt(Draw(grey with { Scale = false }).Px, 4, 470), plain, "scale off");
+                Check(PixelAt(Draw(grey with { Scale = false }).Px, 4, 4) != plain, "scale off: readouts stay");
+                Eq(PixelAt(Draw(grey with { Crosshair = false }).Px, 321, 241), plain, "crosshair off");
+                Eq(Draw(grey with { HotSpot = false }).R.LastHotSpotPx, ((int, int)?)null, "hotspot off");
+                Check(Draw(grey with { Crosshair = false }).R.LastHotSpotPx != null, "crosshair off: hot spot stays");
+
+                var badged = Draw(grey with { Overlay = false }, "Calibrating (shutter)").Px;
+                Check(PixelAt(badged, 320, 240) != plain, "overlay off: the badge still shows");
+            });
+            yield return ("tray art: icon in the palette's colours, green cross, round corners", () =>
+            {
+                foreach (var n in new[] { 16, 20, 24, 32, 48 })
+                {
+                    var px = TrayArt.Icon(n, InfernoLut.Rgb);
+                    Eq(px.Length, n * n * 4, $"{n}: size");
+                    Check(px[3] < 32, $"{n}: corner (nearly) transparent, alpha {px[3]}"); // anti-aliased edge
+                    Eq(px[((n / 2) * n + n / 2) * 4 + 3], (byte)255, $"{n}: centre opaque");
+                    var cx = (int)(0.47 * n);
+                    var cy = (int)(0.62 * n);
+                    var o = (cy * n + cx) * 4;
+                    Check(px[o + 1] > 200 && px[o + 2] < 60, $"{n}: green cross at its centre ({px[o + 2]}, {px[o + 1]}, {px[o]})");
+                    for (var i = 0; i < px.Length; i += 4)
+                        Check(px[i] <= px[i + 3] && px[i + 1] <= px[i + 3] && px[i + 2] <= px[i + 3], $"{n}: premultiplied");
+                }
+                var grey = TrayArt.Icon(32, Palettes.Lut(WebcamSettings.Default with { Palette = "grey" }));
+                var inferno = TrayArt.Icon(32, InfernoLut.Rgb);
+                Check(!grey.SequenceEqual(inferno), "follows the palette");
+                var sw = TrayArt.Swatch(30, 10, InfernoLut.Rgb);
+                Eq(sw.Length, 30 * 10 * 4, "swatch size");
+                var mid = (5 * 30 + 28) * 4;
+                var li = 28 * 255 / 29 * 3; // column 28 of 0..29
+                Eq((sw[mid + 2], sw[mid + 1], sw[mid]), (InfernoLut.Rgb[li], InfernoLut.Rgb[li + 1], InfernoLut.Rgb[li + 2]), "swatch: hot on the right");
             });
             yield return ("renderer: rotated picture is letterboxed", () =>
             {
