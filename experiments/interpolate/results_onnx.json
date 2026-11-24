@@ -1,0 +1,105 @@
+{
+ "noise_mk": 7.0,
+ "params": {
+  "levels": 4,
+  "iters": 3,
+  "window": 7,
+  "lam_mk2": 400.0,
+  "max_step_px": 2.0,
+  "blend_k_mk": 1000000000.0
+ },
+ "onnx_check": {
+  "providers": [
+   "DmlExecutionProvider",
+   "CPUExecutionProvider"
+  ],
+  "mid_max_abs_mk": 0.017578125,
+  "mid_p99_abs_mk": 0.00177001953125,
+  "flow_u_max_abs_px": 0.00013184547424316406
+ },
+ "static": {
+  "repeat": 7.0,
+  "blend": 4.9,
+  "flow": 5.2,
+  "p99.9_abs_err": {
+   "repeat": 23.0,
+   "blend": 16.0,
+   "flow": 18.0
+  }
+ },
+ "pan_1px_per_frame": {
+  "repeat": 111.2,
+  "blend": 5.0,
+  "flow": 10.0,
+  "p99.9_abs_err": {
+   "repeat": 999.0,
+   "blend": 17.0,
+   "flow": 135.0
+  }
+ },
+ "pan_3px_per_frame": {
+  "repeat": 290.8,
+  "blend": 157.2,
+  "flow": 11.5,
+  "p99.9_abs_err": {
+   "repeat": 2498.0,
+   "blend": 1314.0,
+   "flow": 152.0
+  }
+ },
+ "pan_6px_per_frame": {
+  "repeat": 477.6,
+  "blend": 331.0,
+  "flow": 14.1,
+  "p99.9_abs_err": {
+   "repeat": 4120.0,
+   "blend": 2834.0,
+   "flow": 120.0
+  }
+ },
+ "pan_10px_per_frame": {
+  "repeat": 606.2,
+  "blend": 440.2,
+  "flow": 14.7,
+  "p99.9_abs_err": {
+   "repeat": 5272.0,
+   "blend": 3685.0,
+   "flow": 148.0
+  }
+ },
+ "person_4px_per_frame": {
+  "repeat": 485.0,
+  "blend": 274.5,
+  "flow": 58.8,
+  "p99.9_abs_err": {
+   "repeat": 6612.0,
+   "blend": 3428.0,
+   "flow": 947.0
+  },
+  "rms_near_person_edges": {
+   "repeat": 1858.0,
+   "blend": 1013.0,
+   "flow": 212.0
+  }
+ },
+ "person_10px_per_frame": {
+  "repeat": 920.0,
+  "blend": 616.0,
+  "flow": 117.4,
+  "p99.9_abs_err": {
+   "repeat": 8008.0,
+   "blend": 4008.0,
+   "flow": 3507.0
+  },
+  "rms_near_person_edges": {
+   "repeat": 3200.0,
+   "blend": 2096.0,
+   "flow": 389.0
+  }
+ },
+ "latency_ms_onnx": {
+  "median": 1.62,
+  "p99": 2.57
+ },
+ "graph_nodes": 629
+}

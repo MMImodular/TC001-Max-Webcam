@@ -84,6 +84,9 @@ Downloads/
 experiments/runs/raw/
 experiments/stalls/runs/raw/
 experiments/noise/runs/raw/
+experiments/interpolate/runs/
+# ONNX graphs the denoise / interpolate experiments write (rebuilt from the code)
+experiments/*/*.onnx
 experiments/downloads/
 
 # --- our own test captures are source: keep them even though they are binary ---------------

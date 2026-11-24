@@ -1,0 +1,48 @@
+{
+ "run": "20261123-125327",
+ "shutters": 184,
+ "jump_frames": 125,
+ "params": {
+  "sigma_mk": 32.0,
+  "clip_sigma": 3.0,
+  "a_min": 0.0625,
+  "t0_sigma": 1.2,
+  "t1_sigma": 3.0
+ },
+ "static_floor_mk": 13.395499229431152,
+ "fine_error_vs_truth_mk": {
+  "raw": 39.26,
+  "table": 32.8,
+  "table+flicker+filter": 24.17,
+  "flicker+filter (no table)": 32.48,
+  "table+flicker": 32.8
+ },
+ "per_pixel_temporal_std_mk": {
+  "raw": 28.06,
+  "flicker removed": 23.06,
+  "filtered": 6.82
+ },
+ "frame_mean_std_mk": {
+  "raw": 14.69,
+  "flicker removed": 0.55
+ },
+ "moving_disc_2K_3px_per_frame": {
+  "mean_shortfall_inside_mk": 0.0,
+  "mean_ghost_10_frames_behind_mk": -0.5
+ },
+ "step_500mK_frames_to_90pct": 1,
+ "step_500mK_response_first_8": [
+  496.0,
+  496.0,
+  496.0,
+  496.0,
+  497.0,
+  497.0,
+  497.0,
+  497.0
+ ],
+ "latency_ms_numpy_cpu": {
+  "median": 0.411,
+  "p99": 0.576
+ }
+}
