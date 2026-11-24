@@ -1,9 +1,12 @@
 """TC001 Max denoiser prototype (experiment only; the shipped webcam path does not use it).
 
 Written by Claude (Anthropic) for this repository, 2026-11-23. Own code; the methods are textbook:
-a motion-adaptive recursive temporal filter (as in video temporal noise reduction), a robust
+a motion-adaptive recursive temporal filter (as in video temporal noise reduction: Dubois and Sabri,
+IEEE Trans. Communications 32(7), 1984; Brailean et al., Proc. IEEE 83(9), 1995), a robust
 common-mode (whole-frame flicker) estimate, and averaging of the camera's shutter offset tables
-through the jumps they cause.
+through the jumps they cause (both from this project's noise study, docs/NOISE_AND_CALIBRATION.md).
+The ONNX bytes are written from the ONNX format and operator specification (github.com/onnx/onnx,
+onnx.proto, Apache-2.0) and the protobuf wire-format documentation; no ONNX code is included.
 
 Three stages, all in mK on the 192 x 256 temperature plane:
 

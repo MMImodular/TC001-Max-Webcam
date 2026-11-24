@@ -252,13 +252,31 @@ namespace TC001MaxWebcam.Core
             var previous = _sessionThread;
             _closing = previous is { IsAlive: true } ? _session : null;
             var session = _o.SessionFactory?.Invoke(_o.LinkFactory, _o.Clock) ?? new CameraSession(_o.LinkFactory, _o.Clock);
+            var watcher = Settings;
+            Denoiser? denoiser = null;   // setting denoise; on the reader thread, one per session
             session.OnFrame = f =>
             {
-                if (ReferenceEquals(_session, session))
-                    _frame = f;
+                if (!ReferenceEquals(_session, session))
+                    return;
+                if (watcher.Current.Denoise && f.Temperature.Length == Tc001Max.Width * Tc001Max.Height)
+                {
+                    denoiser ??= new Denoiser(Tc001Max.Width, Tc001Max.Height);
+                    f = new CameraFrame
+                    {
+                        Temperature = denoiser.Process(f.Temperature, f.TMonotonic),
+                        Image = f.Image,
+                        Sequence = f.Sequence,
+                        TWall = f.TWall,
+                        TMonotonic = f.TMonotonic,
+                    };
+                }
+                else
+                {
+                    denoiser = null;     // switched off: start afresh when it comes back on
+                }
+                _frame = f;
             };
             // settings auto_shutter / idle_auto_shutter (docs/PROTOCOL.md "Automatic shutter"); applied by the reader
-            var watcher = Settings;
             session.WantAutoShutter = () => watcher.Current.AutoShutter;
             session.IdleAutoShutter = () => watcher.Current.IdleAutoShutter;
             session.FastRetryUntil = _fastRetryUntil;

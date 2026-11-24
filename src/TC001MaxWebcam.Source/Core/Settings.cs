@@ -40,6 +40,10 @@
 //   hotspot            true | false         the green + on the hottest pixel, with its temperature
 //   readouts           true | false         the top bar: MAX / CENTRE temperatures
 //   scale              true | false         the bottom bar: colour scale, range mode, time, source
+//   denoise            true | false         noise reduction on the temperatures (Denoiser.cs): shutter
+//                                           table averaging, flicker removal and a motion-adaptive
+//                                           temporal filter; readouts and the range use the result.
+//                                           Default false.
 
 using System;
 using System.Collections.Generic;
@@ -93,6 +97,7 @@ namespace TC001MaxWebcam.Core
         public bool HotSpot { get; init; } = true;
         public bool Readouts { get; init; } = true;
         public bool Scale { get; init; } = true;
+        public bool Denoise { get; init; }
 
         public Orientation Orientation => new(Rotate, MirrorHorizontal, MirrorVertical);
 
@@ -135,7 +140,7 @@ namespace TC001MaxWebcam.Core
 
         public static readonly string[] Keys =
             ["rotate", "mirror_horizontal", "mirror_vertical", "units", "palette", "custom_palette", "range", "range_speed", "range_min", "range_max", "auto_shutter", "idle_auto_shutter",
-             "overlay", "crosshair", "hotspot", "readouts", "scale"];
+             "overlay", "crosshair", "hotspot", "readouts", "scale", "denoise"];
 
         public static readonly string[] Help =
         [
@@ -156,6 +161,7 @@ namespace TC001MaxWebcam.Core
             "hotspot=true|false              hottest-pixel mark and its temperature",
             "readouts=true|false             top bar: MAX / CENTRE",
             "scale=true|false                bottom bar: colour scale, range mode, time",
+            "denoise=true|false              noise reduction (temporal filter, flicker, shutter tables)",
         ];
 
         private static readonly JsonDocumentOptions JsonOptions = new()
@@ -258,6 +264,8 @@ namespace TC001MaxWebcam.Core
                     return s with { Readouts = Bool("readouts", v) };
                 case "scale":
                     return s with { Scale = Bool("scale", v) };
+                case "denoise":
+                    return s with { Denoise = Bool("denoise", v) };
                 default:
                     throw new SettingsException($"unknown setting '{key}' (known: {string.Join(", ", Keys)})");
             }
@@ -448,6 +456,7 @@ namespace TC001MaxWebcam.Core
                 w.WriteBoolean("hotspot", s.HotSpot);
                 w.WriteBoolean("readouts", s.Readouts);
                 w.WriteBoolean("scale", s.Scale);
+                w.WriteBoolean("denoise", s.Denoise);
                 w.WriteEndObject();
             }
             return Encoding.UTF8.GetString(ms.ToArray()) + "\n";
@@ -559,7 +568,8 @@ namespace TC001MaxWebcam.Core
             (s.Range == RangeMode.Auto && s.RangeSpeed != RangeSpeed.Normal ? $" ({s.RangeSpeed.ToString().ToLowerInvariant()})" : "") +
             (s.Range == RangeMode.Manual ? $" {s.RangeMin.ToString(CultureInfo.InvariantCulture)} .. {s.RangeMax.ToString(CultureInfo.InvariantCulture)}" : "") +
             $", auto shutter {(s.AutoShutter ? "on" : "off")}, idle {SettingsFile.IdleText(s.IdleAutoShutter)}" +
-            (s.Overlay ? Hidden(s) : ", overlay off");
+            (s.Overlay ? Hidden(s) : ", overlay off") +
+            (s.Denoise ? ", denoise on" : "");
 
         private static string Hidden(WebcamSettings s)
         {

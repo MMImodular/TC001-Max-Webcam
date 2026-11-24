@@ -82,6 +82,19 @@ experiments\noise\noise_capture.py: drives the camera through experiments\cam.py
   claim files follow the author's labbench ownership format. analyze_noise.py: written for this
   project; its methods (3D noise, Allan deviation, Welch PSD) are from the papers cited in
   docs\NOISE_AND_CALIBRATION.md.
+src\TC001MaxWebcam.Source\Core\Denoiser.cs: own code, a port of this repository's prototype
+  experiments\denoise\denoise.py; no code copied. Methods: the motion-adaptive recursive
+  temporal filter (Dubois and Sabri, IEEE Trans. Communications 32(7), 1984; Brailean et al.,
+  Proc. IEEE 83(9), 1995), and flicker removal and shutter-table averaging worked out from this
+  project's noise study (docs\NOISE_AND_CALIBRATION.md, which lists its own references).
+experiments\denoise\*.py, experiments\interpolate\*.py: own code. The ONNX graphs are written by
+  hand from the ONNX format and operator specification (github.com/onnx/onnx, onnx.proto and
+  docs\Operators.md, Apache-2.0); no ONNX code is included. The interpolator is coarse-to-fine
+  Lucas-Kanade optical flow (Lucas and Kanade, IJCAI 1981; Bouguet, Intel 2000). They run with
+  NumPy (BSD-3-Clause), matplotlib (matplotlib licence), OpenCV (Apache-2.0) and ONNX Runtime
+  with DirectML (MIT, Microsoft), and export_video.py runs FFmpeg with libx264 (GPL build from
+  imageio-ffmpeg, BSD-2-Clause) as a separate program. None of these is included or shipped.
+  record_motion.py drives the camera through experiments\noise\noise_capture.py (above).
 All other files (Core\CameraClaims.cs, Display.cs, FrameRenderer.cs, Log.cs, Palettes.cs,
   PixelFont.cs, Settings.cs, TrayArt.cs, UpdateRules.cs, WebcamEngine.cs,
   src\TC001MaxWebcam\Updater.cs, src\TC001MaxWebcam.Tray\*.cs (the tray icon, written from

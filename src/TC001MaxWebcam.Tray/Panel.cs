@@ -371,6 +371,7 @@ namespace TC001MaxWebcam.Tray
 
             y = Section("Camera", y, left, right);
             y = Toggle("Automatic shutter", s.AutoShutter, true, () => Set("auto_shutter", s.AutoShutter ? "off" : "on"), y, left, right, 0);
+            y = Toggle("Denoise", s.Denoise, true, () => Set("denoise", Bool(!s.Denoise)), y, left, right, 0);
 
             // footer: links
             y += Px(8);

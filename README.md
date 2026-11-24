@@ -88,6 +88,42 @@ show the same colours. Some of the code is a port of the owner's own, unpublishe
 therefore attributed to those sources. `THIRD_PARTY_NOTICES.txt` lists the origin of every file,
 with the licence texts.
 
+**The Denoise filter** (`Core/Denoiser.cs`, 1.4.0) is this project's own code, ported from the
+prototype in `experiments/denoise/`. No code was copied. Its methods come from the literature and
+from this project's own measurements:
+
+- The motion-adaptive recursive temporal filter is the standard video noise-reduction filter.
+  See E. Dubois and S. Sabri, "Noise reduction in image sequences using motion-compensated
+  temporal filtering", *IEEE Trans. Communications* 32(7), 826-831, 1984, and J. C. Brailean,
+  R. P. Kleihorst, S. Efstratiadis, A. K. Katsaggelos and R. L. Lagendijk, "Noise reduction
+  filters for dynamic image sequences: a review", *Proc. IEEE* 83(9), 1272-1292, 1995. This
+  filter does no motion compensation; it simply stops averaging where a pixel changes.
+- Removing the whole-frame flicker with a clipped mean, and averaging the shutter's offset tables
+  through the jumps they cause, were worked out from the noise study in
+  `docs/NOISE_AND_CALIBRATION.md` and `experiments/noise/`. Background on shutter (one-point)
+  correction and non-uniformity is in that document's references, especially Scribner et al.
+  (1991) and Budzier and Gerlach (2011).
+- The fine-pattern split (an image minus a double box blur) is a standard approximation of a
+  Gaussian blur.
+- Detecting a shutter click from repeated frames relies on the camera's behaviour found in
+  `experiments/LOG.md`.
+
+The experiments are not shipped and use other tools.
+
+| Tool | Used for | Licence |
+|---|---|---|
+| [NumPy](https://numpy.org) and [matplotlib](https://matplotlib.org) | All analysis; matplotlib's colour maps in the previews and videos | BSD-3-Clause; matplotlib licence (PSF-based) |
+| [ONNX](https://github.com/onnx/onnx) | The model format. `experiments/denoise/denoise.py` and `experiments/interpolate/graph.py` write it by hand from `onnx.proto` and the operator specification (opset 17); no ONNX code is included. | Apache-2.0 |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) with DirectML | Runs those graphs on the GPU. Installed separately, not included. | MIT |
+| [OpenCV](https://opencv.org) (`opencv-python`) | Image scaling and drawing in `export_video.py` | Apache-2.0 |
+| [FFmpeg](https://ffmpeg.org) with libx264, the binary from [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg) | Encoding the MP4 videos in `export_video.py`. Run as a separate program, not included. | GPL (this build); imageio-ffmpeg BSD-2-Clause |
+
+The frame interpolator prototype (`experiments/interpolate/`) uses coarse-to-fine Lucas-Kanade
+optical flow: B. D. Lucas and T. Kanade, "An iterative image registration technique with an
+application to stereo vision", *Proc. IJCAI* 1981, 674-679, in the pyramidal form of J.-Y.
+Bouguet, "Pyramidal implementation of the Lucas Kanade feature tracker", Intel Corporation, 2000.
+It is own code.
+
 ## Licence
 
 [Apache License 2.0](LICENSE). Third-party parts keep their own licences (table above).
@@ -170,7 +206,7 @@ settings; click elsewhere or press Esc to close it. It has:
   it with Windows' colour picker, or use + / − to add or remove one (2 to 5, cold to hot);
 - colour range, how fast the auto range follows the scene, and units;
 - rotate, and mirror left-right or top-bottom;
-- the automatic shutter;
+- the automatic shutter, and *Denoise*;
 - *Edit settings file* (for the manual range and the custom palette), *Open log* and *Exit*.
 
 Right-click the icon for a short menu with the same last three. The window follows Windows' light
@@ -201,6 +237,7 @@ TC001MaxWebcam settings reset
 | `range_min`, `range_max` | numbers in `units`, within -100..600 °C | `20`, `40` |
 | `auto_shutter` | `on`, `off`. `off` stops the click, but readings drift and fixed-pattern noise grows over time. | `on` |
 | `idle_auto_shutter` | `off`, `on`, `unchanged`: what the shutter is left at when the camera closes | `off` |
+| `denoise` | `true`, `false`: a temporal noise filter that keeps moving edges sharp, removes whole-frame flicker and averages out the error each shutter adds to the fixed pattern | `false` |
 | `overlay` | `true`, `false`: `false` hides every mark and bar below (status badges still show) | `true` |
 | `crosshair` | `true`, `false`: the small x at the centre | `true` |
 | `hotspot` | `true`, `false`: the green + on the hottest pixel, with its temperature | `true` |
@@ -262,7 +299,7 @@ The log is `C:\ProgramData\TC001MaxWebcam\webcam.log`.
 | `installer/` | The WiX v5 `.msi` package. |
 | `tests/` | The console self-test, and real camera captures used as fixtures. |
 | `docs/` | `PROTOCOL.md` (the USB protocol, with sources), `STATE_OF_THE_ART.md`, `NOISE_AND_CALIBRATION.md` (measuring noise and per-pixel drift). |
-| `experiments/` | The Python experiments behind the auto-shutter and stall findings, with their logs, and `noise/` (the overnight noise and drift study). Not shipped. |
+| `experiments/` | The Python experiments behind the auto-shutter and stall findings, with their logs, `noise/` (the overnight noise and drift study), `denoise/` (the prototype of the Denoise filter) and `interpolate/` (a frame interpolator prototype). Not shipped. |
 | `build.ps1`, `install.ps1`, `uninstall.ps1` | The build script, and the scripted install and uninstall. |
 | `.github/workflows/` | GitHub Actions: `build.yml` builds and tests every push; `release.yml` (run by hand) publishes a release with the `.msi`. |
 | `CHANGELOG.md` | What changed in each version; each section becomes that release's notes. |

@@ -190,6 +190,199 @@ namespace TC001MaxWebcam.Tests
             return SettingsFile.Parse(json, problems);
         }
 
+        // -- denoiser (Core/Denoiser.cs) ------------------------------------------------------------
+        private const int DW = Tc001Max.Width, DH = Tc001Max.Height, DN = DW * DH;
+
+        private static float Gauss(Random r) =>
+            (float)(Math.Sqrt(-2 * Math.Log(1 - r.NextDouble())) * Math.Cos(2 * Math.PI * r.NextDouble()));
+
+        private static float[] Noisy(float[] truth, Random r, float sigma)
+        {
+            var o = new float[DN];
+            for (var i = 0; i < DN; i++)
+                o[i] = truth[i] + sigma * Gauss(r);
+            return o;
+        }
+
+        /// <summary>rms over the inner region (15 px border left out) of a - b, after removing the mean difference.</summary>
+        private static double InnerRms(float[] a, float[] b)
+        {
+            double s = 0, s2 = 0;
+            var n = 0;
+            for (var y = 15; y < DH - 15; y++)
+                for (var x = 15; x < DW - 15; x++)
+                {
+                    double d = a[y * DW + x] - b[y * DW + x];
+                    s += d;
+                    s2 += d * d;
+                    n++;
+                }
+            return Math.Sqrt(Math.Max(s2 / n - (s / n) * (s / n), 0));
+        }
+
+        private static float[] Scene()
+        {
+            var t = new float[DN];
+            for (var y = 0; y < DH; y++)
+                for (var x = 0; x < DW; x++)
+                    t[y * DW + x] = 24f + 2f * x / DW + 0.5f * y / DH;
+            return t;
+        }
+
+        private static IEnumerable<(string, Action)> DenoiserTests()
+        {
+            yield return ("denoise: a still noisy scene gets much quieter", () =>
+            {
+                var r = new Random(1);
+                var truth = Scene();
+                var dn = new Denoiser(DW, DH);
+                double rawErr = 0, outErr = 0;
+                var n = 0;
+                for (var k = 0; k < 300; k++)
+                {
+                    var x = Noisy(truth, r, Denoiser.SigmaC);
+                    var o = dn.Process(x, k / 25.0);
+                    if (k >= 100)
+                    {
+                        rawErr += InnerRms(x, truth);
+                        outErr += InnerRms(o, truth);
+                        n++;
+                    }
+                }
+                rawErr /= n;
+                outErr /= n;
+                Check(outErr < 0.4 * rawErr, $"noise {rawErr * 1000:F1} -> {outErr * 1000:F1} mK");
+            });
+            yield return ("denoise: motion passes at once (no smearing)", () =>
+            {
+                var r = new Random(2);
+                var truth = Scene();
+                var dn = new Denoiser(DW, DH);
+                float[] o = [];
+                for (var k = 0; k < 120; k++)
+                {
+                    var tk = (float[])truth.Clone();
+                    if (k >= 100)
+                        for (var y = 60; y < 100; y++)
+                            for (var x = 100; x < 140; x++)
+                                tk[y * DW + x] += 2f;
+                    o = dn.Process(Noisy(tk, r, Denoiser.SigmaC), k / 25.0);
+                    if (k == 101)
+                        Near(o[80 * DW + 120] - truth[80 * DW + 120], 2.0, 0.15, "a +2 K square, one frame after it appeared");
+                }
+                Near(o[80 * DW + 60] - truth[80 * DW + 60], 0.0, 0.1, "outside the square");
+            });
+            yield return ("denoise: a slow change of the whole scene is followed (flicker removal keeps it)", () =>
+            {
+                var r = new Random(3);
+                var truth = Scene();
+                var dn = new Denoiser(DW, DH);
+                float[] o = [], tk = [];
+                for (var k = 0; k < 750; k++)
+                {
+                    tk = (float[])truth.Clone();
+                    var drift = 1.5f * k / 750f;                    // +1.5 K in 30 s
+                    for (var i = 0; i < DN; i++)
+                        tk[i] += drift;
+                    o = dn.Process(Noisy(tk, r, Denoiser.SigmaC), k / 25.0);
+                }
+                double mo = 0, mt = 0;
+                for (var i = 0; i < DN; i++)
+                {
+                    mo += o[i];
+                    mt += tk[i];
+                }
+                Near((mo - mt) / DN, 0.0, 0.05, "mean level after 30 s of drift");
+            });
+            yield return ("denoise: shutter tables are averaged through their jumps", () =>
+            {
+                // each shutter: ~15 repeated frames, then a new table with its own 30 mK white error
+                var r = new Random(4);
+                var truth = Scene();
+                var dn = new Denoiser(DW, DH);
+                var table = new float[DN];
+                double rawErr = 0, outErr = 0;
+                var n = 0;
+                var t = 0.0;
+                float[] last = [];
+                for (var shutter = 0; shutter <= 8; shutter++)
+                {
+                    if (shutter > 0)
+                    {
+                        for (var k = 0; k < 15; k++, t += 0.04)
+                            dn.Process(last, t);             // the camera repeats its last frame
+                        table = new float[DN];
+                        for (var i = 0; i < DN; i++)
+                            table[i] = 0.03f * Gauss(r);
+                    }
+                    var withTable = new float[DN];
+                    for (var i = 0; i < DN; i++)
+                        withTable[i] = truth[i] + table[i];
+                    for (var k = 0; k < 250; k++, t += 0.04)
+                    {
+                        last = Noisy(withTable, r, Denoiser.SigmaC);
+                        var o = dn.Process(last, t);
+                        if (shutter >= 5 && k >= 150)
+                        {
+                            rawErr += InnerRms(withTable, truth);   // what the camera's table alone leaves
+                            outErr += InnerRms(o, truth);
+                            n++;
+                        }
+                    }
+                }
+                Eq(dn.Shutters, 8, "shutters seen");
+                Eq((dn.JumpsUsed, dn.JumpsRejected), (8, 0), "jumps used / rejected");
+                rawErr /= n;
+                outErr /= n;
+                Check(outErr < 0.75 * rawErr, $"table error {rawErr * 1000:F1} -> {outErr * 1000:F1} mK");
+            });
+            yield return ("denoise: a shutter while the scene moves clears the table history", () =>
+            {
+                var r = new Random(5);
+                var truth = Scene();
+                var dn = new Denoiser(DW, DH);
+                var t = 0.0;
+                float[] last = [];
+                for (var k = 0; k < 60; k++, t += 0.04)
+                {
+                    last = Noisy(truth, r, Denoiser.SigmaC);
+                    dn.Process(last, t);
+                }
+                for (var k = 0; k < 15; k++, t += 0.04)
+                    dn.Process(last, t);
+                var moved = (float[])truth.Clone();
+                for (var y = 40; y < 140; y++)
+                    for (var x = 60; x < 120; x++)
+                        moved[y * DW + x] += 6f;                         // someone walked in during the shutter
+                for (var k = 0; k < 40; k++, t += 0.04)
+                    dn.Process(Noisy(moved, r, Denoiser.SigmaC), t);
+                Eq((dn.Shutters, dn.JumpsUsed, dn.JumpsRejected), (1, 0, 1), "rejected");
+                Check(dn.Correction.ToArray().All(v => v == 0), "no correction applied");
+            });
+            yield return ("denoise: no-reading pixels stay NaN; a 2-s gap starts afresh", () =>
+            {
+                var r = new Random(6);
+                var truth = Scene();
+                var dn = new Denoiser(DW, DH);
+                float[] o = [];
+                for (var k = 0; k < 50; k++)
+                {
+                    var x = Noisy(truth, r, Denoiser.SigmaC);
+                    x[5] = float.NaN;
+                    o = dn.Process(x, k / 25.0);
+                }
+                Check(float.IsNaN(o[5]) && !float.IsNaN(o[6]), "NaN passes, neighbours fine");
+                var jump = (float[])truth.Clone();
+                for (var i = 0; i < DN; i++)
+                    jump[i] += 0.1f;                                     // smaller than the motion threshold
+                o = dn.Process(jump, 50 / 25.0 + 3.0);
+                Near(o[1000], jump[1000], 1e-5, "after a gap the first frame is passed as is");
+                Check(Same(dn.Process(jump, 50 / 25.0 + 3.04), dn.Process(jump, 50 / 25.0 + 3.08)), "a repeated frame returns the same output");
+            });
+        }
+
+        private static bool Same(float[] a, float[] b) => ReferenceEquals(a, b) || a.AsSpan().SequenceEqual(b);
+
         // -- the tests -----------------------------------------------------------------------------
         private static IEnumerable<(string, Action)> Tests()
         {
@@ -736,6 +929,22 @@ namespace TC001MaxWebcam.Tests
                 Check(old.Overlay && old.Scale && problems.Count == 0, "an older file shows everything");
                 Throws<SettingsException>(() => SettingsFile.Apply(d, ["scale=maybe"]), "bool");
             });
+            yield return ("settings: denoise", () =>
+            {
+                var d = WebcamSettings.Default;
+                Check(!d.Denoise, "off by default");
+                Check(SettingsFile.ToJson(d).Contains("\"denoise\": false"), "written");
+                Check(SettingsFile.Help.Any(h => h.StartsWith("denoise=")), "help line");
+                var s = SettingsFile.Apply(d, ["denoise=on"]);
+                Check(s.Denoise && !SettingsWatcher.Same(s, d), "set");
+                Check(SettingsWatcher.Same(Parse(SettingsFile.ToJson(s), out var problems), s) && problems.Count == 0, "round trip");
+                Check(SettingsWatcher.Describe(s).EndsWith("denoise on"), SettingsWatcher.Describe(s));
+                Check(!SettingsWatcher.Describe(d).Contains("denoise"), "describe defaults");
+                Check(!Parse("{\"rotate\": 90}", out _).Denoise, "an older file: off");
+                Throws<SettingsException>(() => SettingsFile.Apply(d, ["denoise=maybe"]), "bool");
+            });
+            foreach (var t in DenoiserTests())
+                yield return t;
             yield return ("settings: range_speed, and the auto range narrows at that speed", () =>
             {
                 var d = WebcamSettings.Default;

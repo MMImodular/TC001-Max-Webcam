@@ -3,6 +3,26 @@
 Each `## <version>` section becomes the notes of that GitHub release
 (`.github/workflows/release.yml`). Add the section before running the release.
 
+## 1.4.0
+
+- **Denoise** (off by default). A switch in the settings window under Camera, or
+  `settings set denoise=true`. It works on the temperatures, so the readouts are steadier too:
+  - a motion-adaptive temporal filter: still areas are averaged over about 16 frames, while
+    anything that changes by more than about 0.1 K passes straight through, so moving edges stay
+    sharp;
+  - whole-frame flicker removal: the small level jumps that shift every pixel at once;
+  - shutter-table averaging: each shutter click stores a new fixed-pattern table with about
+    30 mK of random error. The filter measures each click's change over the next second and
+    averages the last four tables, so the pattern no longer reshuffles at every click. Clicks
+    while the scene moves are skipped.
+  Measured with this code on recordings (an even plate, 232 shutters, and a moving scene):
+  noise on still pixels from 31 mK to 7 mK, whole-frame flicker from 13 mK to 0.4 mK, and the
+  fine fixed pattern from 39 mK to 28 mK. Moving pixels trail the camera by a median of 10 mK.
+  It costs about 0.6 ms of CPU a frame. The prototype is in `experiments/denoise/`.
+  Own code; the temporal filter follows Dubois and Sabri (1984) and Brailean et al. (1995), and
+  the shutter and flicker stages come from this project's noise study. Full credits are in the
+  README under Sources and attribution, and in `THIRD_PARTY_NOTICES.txt`.
+
 ## 1.3.4
 
 - **Fixed: the picture sometimes jumped sideways for one frame** (about every 10 s). When the
