@@ -3,6 +3,21 @@
 Each `## <version>` section becomes the notes of that GitHub release
 (`.github/workflows/release.yml`). Add the section before running the release.
 
+## 1.5.0
+
+- **Updates from the tray icon.** Once a day the tray icon asks GitHub for the latest release.
+  When a newer one is out, Windows shows a notification and the settings window gets an
+  *Update* button (new section Updates; the right-click menu has it too). One click downloads the
+  `.msi`, checks its size and the SHA-256 that GitHub lists, and installs it through
+  `TC001MaxWebcam update`. That still asks once for administrator rights: the webcam runs inside
+  a Windows service, so an install for one user only is not possible.
+- *Check now* in the settings window, and *Check for updates* in the right-click menu.
+- New setting `update_check` (default `true`) to turn the daily check off. The check sends only the
+  request; the tray writes what it did to `%LOCALAPPDATA%\TC001MaxWebcam\tray.log`.
+- `TC001MaxWebcam update --no-remember`: install from `--from` without keeping it as the update source.
+- Updates work from 1.5.0 on, so 1.5.0 itself is installed by hand. Each new version reaches
+  installed PCs once its GitHub release is published (Actions > Release > Run workflow).
+
 ## 1.4.0
 
 - **Denoise** (off by default). A switch in the settings window under Camera, or

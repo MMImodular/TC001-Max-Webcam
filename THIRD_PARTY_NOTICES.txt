@@ -96,7 +96,8 @@ experiments\denoise\*.py, experiments\interpolate\*.py: own code. The ONNX graph
   imageio-ffmpeg, BSD-2-Clause) as a separate program. None of these is included or shipped.
   record_motion.py drives the camera through experiments\noise\noise_capture.py (above).
 All other files (Core\CameraClaims.cs, Display.cs, FrameRenderer.cs, Log.cs, Palettes.cs,
-  PixelFont.cs, Settings.cs, TrayArt.cs, UpdateRules.cs, WebcamEngine.cs,
+  PixelFont.cs, ReleaseCheck.cs (from GitHub's REST API documentation), Settings.cs, TrayArt.cs,
+  UpdateRules.cs, WebcamEngine.cs,
   src\TC001MaxWebcam\Updater.cs, src\TC001MaxWebcam.Tray\*.cs (the tray icon, written from
   Microsoft's Win32 documentation), the installer, scripts, .github\workflows (GitHub Actions;
   they use GitHub's own actions checkout, setup-dotnet and upload-artifact, MIT, run by GitHub

@@ -338,7 +338,9 @@ namespace TC001MaxWebcam.Tray
 
         // -- notification area ---------------------------------------------------------------------
         public const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
-        public const uint NIF_MESSAGE = 0x01, NIF_ICON = 0x02, NIF_TIP = 0x04, NIF_SHOWTIP = 0x80;
+        public const uint NIF_MESSAGE = 0x01, NIF_ICON = 0x02, NIF_TIP = 0x04, NIF_INFO = 0x10, NIF_SHOWTIP = 0x80;
+        public const uint NIIF_INFO = 0x01, NIIF_RESPECT_QUIET_TIME = 0x80;   // a notification; not during quiet time / full-screen
+        public const uint NIN_BALLOONUSERCLICK = 0x0405;
         public const uint NOTIFYICON_VERSION_4 = 4;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

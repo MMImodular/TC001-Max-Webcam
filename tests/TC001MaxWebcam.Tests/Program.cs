@@ -229,6 +229,81 @@ namespace TC001MaxWebcam.Tests
             return t;
         }
 
+        // -- the tray's update check (Core/ReleaseCheck.cs) -----------------------------------------
+        private const string Sha = "3f1d9a0c5b7e2d4f6a8c0e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f";
+
+        /// <summary>A GitHub "latest release" answer, as documented, trimmed to the fields used.</summary>
+        private static string ReleaseJson(string tag = "v1.5.0", string? asset = null, string? url = null, string digest = "sha256:" + Sha,
+                                          long size = 2_867_200, bool draft = false, bool pre = false)
+        {
+            asset ??= $"TC001MaxWebcam-{tag.TrimStart('v')}-x64.msi";
+            url ??= $"https://github.com/MMImodular/TC001-Max-Webcam/releases/download/{tag}/{asset}";
+            return $$"""
+                {"tag_name": "{{tag}}", "draft": {{(draft ? "true" : "false")}}, "prerelease": {{(pre ? "true" : "false")}},
+                 "html_url": "https://github.com/MMImodular/TC001-Max-Webcam/releases/tag/{{tag}}",
+                 "assets": [
+                   {"name": "notes.txt", "browser_download_url": "https://github.com/x/y/notes.txt", "size": 10},
+                   {"name": "{{asset}}", "browser_download_url": "{{url}}", "size": {{size}}, "digest": "{{digest}}"}]}
+                """;
+        }
+
+        private static IEnumerable<(string, Action)> ReleaseCheckTests()
+        {
+            yield return ("update check: a published release is read", () =>
+            {
+                var r = ReleaseCheck.Parse(ReleaseJson(), out var why);
+                Check(r != null, why);
+                Eq(r!.Version, new Version(1, 5, 0), "version from the tag");
+                Eq(r.AssetName, "TC001MaxWebcam-1.5.0-x64.msi", "the installer");
+                Eq(r.Size, 2_867_200L, "size");
+                Eq(r.Sha256, Sha, "SHA-256");
+                Check(r.DownloadUrl.StartsWith(ReleaseCheck.DownloadPrefix), r.DownloadUrl);
+                Eq(ReleaseCheck.AssetName(new Version(1, 4, 0)), "TC001MaxWebcam-1.4.0-x64.msi", "the wixproj's file name");
+                Eq(ReleaseCheck.Format(new Version(1, 5, 0)), "1.5.0", "format");
+            });
+            yield return ("update check: releases that cannot be used", () =>
+            {
+                void No(string json, string what) => Check(ReleaseCheck.Parse(json, out _) == null, what);
+                No(ReleaseJson(draft: true), "a draft");
+                No(ReleaseJson(pre: true), "a pre-release");
+                No(ReleaseJson(tag: "1.5.0"), "a tag without v");
+                No(ReleaseJson(tag: "vnext"), "a tag that is no version");
+                No(ReleaseJson(asset: "TC001MaxWebcam-1.4.0-x64.msi"), "an installer of another version");
+                No(ReleaseJson(url: "https://example.com/TC001MaxWebcam-1.5.0-x64.msi"), "served from elsewhere");
+                No(ReleaseJson(url: "http://github.com/MMImodular/TC001-Max-Webcam/releases/download/v1.5.0/TC001MaxWebcam-1.5.0-x64.msi"), "not https");
+                No(ReleaseJson(url: "https://github.com/someone/TC001-Max-Webcam/releases/download/v1.5.0/TC001MaxWebcam-1.5.0-x64.msi"), "another repository");
+                No(ReleaseJson(digest: ""), "no checksum");
+                No(ReleaseJson(digest: "sha1:0123"), "not SHA-256");
+                No(ReleaseJson(digest: "sha256:xyz"), "not hex");
+                No(ReleaseJson(size: 0), "no size");
+                No("{\"tag_name\": \"v1.5.0\"}", "no files");
+                No("not json", "not JSON");
+                No("[]", "not an object");
+            });
+            yield return ("update check: SHA-256 and timing", () =>
+            {
+                Eq(ReleaseCheck.Sha256FromDigest("SHA256:" + Sha.ToUpperInvariant()), Sha, "case");
+                Eq(ReleaseCheck.Sha256FromDigest(null), null, "none");
+                var data = System.Text.Encoding.ASCII.GetBytes("abc");
+                var h = System.Security.Cryptography.SHA256.HashData(data);
+                Check(ReleaseCheck.HashMatches("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", h), "SHA-256 of abc");
+                Check(!ReleaseCheck.HashMatches(Sha, h), "another file");
+                Check(!ReleaseCheck.HashMatches(Sha, [1, 2, 3]), "not a hash");
+                var now = new DateTime(2026, 11, 23, 12, 0, 0, DateTimeKind.Utc);
+                Check(ReleaseCheck.Due(null, false, now), "never asked");
+                Check(!ReleaseCheck.Due(now.AddHours(-23), false, now), "asked 23 h ago");
+                Check(ReleaseCheck.Due(now.AddHours(-24), false, now), "asked a day ago");
+                Check(!ReleaseCheck.Due(now.AddMinutes(-30), true, now), "failed 30 min ago");
+                Check(ReleaseCheck.Due(now.AddHours(-1), true, now), "failed an hour ago: try again");
+                Check(ReleaseCheck.Due(now.AddHours(5), false, now), "the clock went back");
+                var r = ReleaseCheck.Parse(ReleaseJson(), out _)!;
+                Check(ReleaseCheck.ShouldNotify(r, null), "first time");
+                Check(!ReleaseCheck.ShouldNotify(r, "1.5.0"), "once per version");
+                Check(ReleaseCheck.ShouldNotify(r, "1.4.0"), "a newer one again");
+                Check(UpdateRules.IsNewer(r.Version, new Version(1, 4, 0)) && !UpdateRules.IsNewer(r.Version, new Version(1, 5, 0)), "only newer releases are offered");
+            });
+        }
+
         private static IEnumerable<(string, Action)> DenoiserTests()
         {
             yield return ("denoise: a still noisy scene gets much quieter", () =>
@@ -944,6 +1019,20 @@ namespace TC001MaxWebcam.Tests
                 Throws<SettingsException>(() => SettingsFile.Apply(d, ["denoise=maybe"]), "bool");
             });
             foreach (var t in DenoiserTests())
+                yield return t;
+            yield return ("settings: update_check", () =>
+            {
+                var d = WebcamSettings.Default;
+                Check(d.UpdateCheck, "on by default");
+                Check(SettingsFile.ToJson(d).Contains("\"update_check\": true"), "written");
+                Check(SettingsFile.Help.Any(h => h.StartsWith("update_check=")), "help line");
+                var s = SettingsFile.Apply(d, ["update_check=false"]);
+                Check(!s.UpdateCheck && !SettingsWatcher.Same(s, d), "set");
+                Check(SettingsWatcher.Same(Parse(SettingsFile.ToJson(s), out var problems), s) && problems.Count == 0, "round trip");
+                Check(SettingsWatcher.Describe(s).EndsWith("update check off"), SettingsWatcher.Describe(s));
+                Check(Parse("{\"rotate\": 90}", out _).UpdateCheck, "an older file: on");
+            });
+            foreach (var t in ReleaseCheckTests())
                 yield return t;
             yield return ("settings: range_speed, and the auto range narrows at that speed", () =>
             {

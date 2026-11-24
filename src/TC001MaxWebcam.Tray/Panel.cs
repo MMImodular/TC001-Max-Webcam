@@ -26,6 +26,9 @@ namespace TC001MaxWebcam.Tray
         private readonly Func<WebcamSettings> _settings;
         private readonly Action<string[]> _set;       // "key=value" assignments, applied together
         private readonly Action _editFile, _openLog, _exit;
+        private readonly Func<UpdateView> _update;       // Updates.cs: the update check's state
+        private readonly Action<ReleaseInfo> _install;
+        private readonly Action _checkNow;
         private IntPtr _hwnd;
         private long _hiddenAt;
         private bool _picking;                         // the colour dialog is open
@@ -44,8 +47,12 @@ namespace TC001MaxWebcam.Tray
         private IntPtr _font, _fontSmall, _fontTitle, _fontSection;
         private uint _fontDpi;
 
-        public Panel(Func<WebcamSettings> settings, Action<string[]> set, Action editFile, Action openLog, Action exit)
+        public Panel(Func<WebcamSettings> settings, Action<string[]> set, Action editFile, Action openLog, Action exit,
+                     Func<UpdateView> update, Action<ReleaseInfo> install, Action checkNow)
         {
+            _update = update;
+            _install = install;
+            _checkNow = checkNow;
             _settings = settings;
             _set = set;
             _editFile = editFile;
@@ -373,6 +380,10 @@ namespace TC001MaxWebcam.Tray
             y = Toggle("Automatic shutter", s.AutoShutter, true, () => Set("auto_shutter", s.AutoShutter ? "off" : "on"), y, left, right, 0);
             y = Toggle("Denoise", s.Denoise, true, () => Set("denoise", Bool(!s.Denoise)), y, left, right, 0);
 
+            y = Section("Updates", y, left, right);
+            y = Toggle("Check for updates daily", s.UpdateCheck, true, () => Set("update_check", Bool(!s.UpdateCheck)), y, left, right, 0);
+            y = UpdateRow(y, left, right);
+
             // footer: links
             y += Px(8);
             if (_draw)
@@ -386,6 +397,27 @@ namespace TC001MaxWebcam.Tray
             Link("Exit", right + Px(8) - exitW, y, linkH, _exit, exitW);
             y += linkH + Px(8);
             return y;
+        }
+
+        /// <summary>The update check's state, and a button: Update when a newer release is known, else Check now.</summary>
+        private int UpdateRow(int y, int left, int right)
+        {
+            var h = Px(36);
+            var v = _update();
+            var busy = v.State is UpdateState.Checking or UpdateState.Downloading or UpdateState.Starting;
+            var text = v.State == UpdateState.Idle ? $"Version {ReleaseCheck.Format(Updates.Current)}" : v.Text;
+            var bw = Px(96);
+            var bh = Px(28);
+            var by = y + (h - bh) / 2;
+            var available = v.Release != null && v.State is UpdateState.Available or UpdateState.Failed;
+            Text(text, new RECT(left, y, right - bw - Px(8), y + h),
+                 v.State == UpdateState.Available ? _t.Text : _t.Dim, _fontSmall, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
+            var button = new RECT(right - bw, by, right, by + bh);
+            if (available && v.Release is { } rel)
+                Button("Update", button, busy ? null : () => _install(rel));
+            else
+                Button(busy ? "..." : "Check now", button, busy ? null : _checkNow);
+            return y + h;
         }
 
         private int Section(string title, int y, int left, int right)

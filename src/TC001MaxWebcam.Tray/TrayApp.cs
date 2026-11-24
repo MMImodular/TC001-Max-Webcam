@@ -1,6 +1,7 @@
 // TC001 Max Thermal Webcam tray: an icon in the notification area. Clicking it opens a small settings
 // window (Panel.cs) that stays open while you change several settings; right-clicking it gives a
-// short menu (settings, edit the file, the log, exit). Every choice is written to C:\ProgramData\TC001MaxWebcam\settings.json through the same
+// short menu (settings, check for updates, edit the file, the log, exit). Once a day it looks for a newer
+// release on GitHub and offers a one-click update (Updates.cs; setting update_check). Every choice is written to C:\ProgramData\TC001MaxWebcam\settings.json through the same
 // strict code as "TC001MaxWebcam settings set" (Core\Settings.cs), and the webcam applies it within
 // about a second, even while an app is streaming. The file is re-read every 2 s, so changes made
 // elsewhere show up; the icon takes the colours of the current palette.
@@ -29,10 +30,14 @@ namespace TC001MaxWebcam.Tray
         private const string Title = "TC001 Max Thermal Webcam";
         private const uint CallbackMessage = WM_APP + 1;
         private const uint ExitMessage = WM_APP + 2;
+        private const uint UpdateMessage = WM_APP + 3;   // Updates.cs: its state changed
         private const uint IconId = 1;
 
         // right-click menu command ids
-        private const uint CmdSettings = 1, CmdEditFile = 2, CmdOpenLog = 3, CmdExit = 4;
+        private const uint CmdSettings = 1, CmdEditFile = 2, CmdOpenLog = 3, CmdExit = 4, CmdUpdates = 5;
+
+        // the first automatic update check waits this long after start (sign-in is busy enough)
+        private const long FirstCheckDelayMs = 60_000;
 
         private static WndProc? _proc; // kept alive: Windows calls it
         private static IntPtr _hwnd;
@@ -42,6 +47,8 @@ namespace TC001MaxWebcam.Tray
         private static WebcamSettings _settings = WebcamSettings.Default;
         private static string _iconPalette = "";
         private static Panel? _panel;
+        private static Updates? _updates;
+        private static long _startedAt;
 
         [STAThread]
         private static int Main()
@@ -79,9 +86,13 @@ namespace TC001MaxWebcam.Tray
             }) { IsBackground = true, Name = "exit request" };
             watcher.Start();
 
+            Log.Sink = TrayLog;
             ReloadSettings(force: true);
+            _startedAt = Environment.TickCount64;
+            _updates = new Updates(() => PostMessageW(hwnd, UpdateMessage, IntPtr.Zero, IntPtr.Zero));
             _panel = new Panel(() => _settings, Set, EditFile, () => Open(LogPath),
-                               () => PostMessageW(_hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero));
+                               () => PostMessageW(_hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero),
+                               () => _updates.View, r => _updates.Install(r), () => _updates.MaybeCheck(true, manual: true));
             AddIcon();
             SetTimer(_hwnd, 1, 2000, IntPtr.Zero); // notice settings changed elsewhere (icon colours, tip)
 
@@ -101,8 +112,10 @@ namespace TC001MaxWebcam.Tray
                 case CallbackMessage:
                     // NOTIFYICON_VERSION_4: the event is in the low word of lParam, the anchor in wParam
                     var ev = (uint)(lParam.ToInt64() & 0xFFFF);
-                    if (ev is NIN_SELECT or NIN_KEYSELECT)
+                    if (ev is NIN_SELECT or NIN_KEYSELECT or NIN_BALLOONUSERCLICK)
                     {
+                        if (ev == NIN_BALLOONUSERCLICK && _panel is { Visible: true })
+                            return IntPtr.Zero;
                         ReloadSettings(force: true);
                         _panel?.Toggle(_hwnd, IconId);
                     }
@@ -117,6 +130,17 @@ namespace TC001MaxWebcam.Tray
                     {
                         UpdateIcon();
                         _panel?.Refresh();
+                    }
+                    if (Environment.TickCount64 - _startedAt > FirstCheckDelayMs)
+                        _updates?.MaybeCheck(_settings.UpdateCheck, manual: false);
+                    return IntPtr.Zero;
+                case UpdateMessage:
+                    _panel?.Refresh();
+                    if (_updates?.Notify is { } release)
+                    {
+                        _updates.Notify = null;
+                        Balloon($"TC001 Max Thermal Webcam {ReleaseCheck.Format(release.Version)} is available",
+                                "Click to open the settings window, then Update. Windows asks for administrator rights once.");
                     }
                     return IntPtr.Zero;
                 case ExitMessage:
@@ -174,6 +198,16 @@ namespace TC001MaxWebcam.Tray
             if (_iconPalette != PaletteKey(_settings))
                 MakeIcon();
             var d = Data(NIF_ICON | NIF_TIP | NIF_SHOWTIP);
+            Shell_NotifyIconW(NIM_MODIFY, ref d);
+        }
+
+        /// <summary>A Windows notification from the icon (held back during quiet time and full-screen apps).</summary>
+        private static void Balloon(string title, string text)
+        {
+            var d = Data(NIF_INFO);
+            d.szInfoTitle = title.Length > 63 ? title[..63] : title;
+            d.szInfo = text.Length > 255 ? text[..255] : text;
+            d.dwInfoFlags = NIIF_INFO | NIIF_RESPECT_QUIET_TIME;
             Shell_NotifyIconW(NIM_MODIFY, ref d);
         }
 
@@ -263,6 +297,9 @@ namespace TC001MaxWebcam.Tray
             {
                 Item(menu, CmdSettings, "Settings...");
                 SetMenuDefaultItem(menu, CmdSettings, 0);
+                var upd = _updates?.View;
+                Item(menu, CmdUpdates, upd is { State: UpdateState.Available, Release: { } rel } ? $"Update to {ReleaseCheck.Format(rel.Version)}..." : "Check for updates",
+                     grayed: _updates?.Busy == true);
                 Separator(menu);
                 Item(menu, CmdEditFile, "Edit settings file...");
                 Item(menu, CmdOpenLog, "Open webcam log", grayed: !File.Exists(LogPath));
@@ -277,6 +314,15 @@ namespace TC001MaxWebcam.Tray
                     case CmdSettings: ReloadSettings(force: true); _panel?.Toggle(_hwnd, IconId); break;
                     case CmdEditFile: EditFile(); break;
                     case CmdOpenLog: Open(LogPath); break;
+                    case CmdUpdates:
+                        if (upd is { State: UpdateState.Available, Release: { } r })
+                            _updates?.Install(r);
+                        else
+                            _updates?.MaybeCheck(true, manual: true);
+                        ReloadSettings(force: true);
+                        if (_panel is { Visible: false })
+                            _panel.Toggle(_hwnd, IconId);
+                        break;
                     case CmdExit: PostMessageW(_hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero); break;
                 }
             }
@@ -287,6 +333,21 @@ namespace TC001MaxWebcam.Tray
         }
 
         private static string LogPath => Path.Combine(Shared.DataDir, Shared.LogName);
+
+        /// <summary>The tray's own log (update checks and downloads): %LOCALAPPDATA%\TC001MaxWebcam\tray.log.</summary>
+        private static void TrayLog(string level, string message)
+        {
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TC001MaxWebcam");
+                Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, "tray.log");
+                if (File.Exists(path) && new FileInfo(path).Length > 1_000_000)
+                    File.Delete(path);
+                File.AppendAllText(path, $"{Log.Stamp()} {level,-5} {message}{Environment.NewLine}");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
 
         private static void EditFile()
         {

@@ -1,10 +1,10 @@
 // TC001MaxWebcam.exe update: the one-click updater (README "Updating").
 //
-//   update [--from PATH] [--check] [--now] [--pause]
+//   update [--from PATH] [--no-remember] [--check] [--now] [--pause]
 //
 // 1. Finds the newest TC001MaxWebcam-*.msi of this product (its UpgradeCode) in the update source:
 //    --from (a folder or one .msi; remembered for next time in HKCU\Software\TC001MaxWebcam
-//    UpdateSource, except with --check), else the remembered folder, else the folder the installed .msi was run from (the
+//    UpdateSource, except with --check or --no-remember), else the remembered folder, else the folder the installed .msi was run from (the
 //    installer writes HKLM\SOFTWARE\TC001MaxWebcam InstalledFrom). --check stops here.
 // 2. Waits until no app streams from the webcam (webcam.log and the webcam's camera claim; --now
 //    skips the wait: the app's picture then stops).
@@ -19,6 +19,9 @@
 //    Before msiexec it asks the tray icon (TC001MaxWebcamTray.exe) to exit, so its files are free,
 //    and afterwards starts it again through Explorer, so that it runs as the signed-in user and not
 //    elevated.
+//
+// The tray icon's Update button (src\TC001MaxWebcam.Tray\Updates.cs) downloads a GitHub release,
+// checks its size and SHA-256, and runs "update --from <that .msi> --no-remember --pause".
 //
 // The decisions are in Core\UpdateRules.cs (checked by the self-test); this file is the Windows side.
 
@@ -80,7 +83,7 @@ namespace TC001MaxWebcam.Cli
             Console.WriteLine($"looking in  : {path} ({source.Origin})");
             if (!File.Exists(path) && !Directory.Exists(path))
                 return Fail($"{path} does not exist (another folder: --from PATH)", 1);
-            if (from != null && !Has(args, "--check"))
+            if (from != null && !Has(args, "--check") && !Has(args, "--no-remember"))
                 Remember(path);
 
             var newest = UpdateRules.Newest(UpdateRules.MsiFiles(path).Select(ReadMsi));

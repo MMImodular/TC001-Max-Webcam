@@ -19,7 +19,7 @@
 //   settings                  print the current settings (and any problems in settings.json).
 //   settings set k=v [k=v..]  validate and write settings.json (nothing is written if a value is bad).
 //   settings reset            write the defaults.
-//   update [--from PATH] [--check] [--now]
+//   update [--from PATH] [--no-remember] [--check] [--now]
 //                             install a newer .msi of this product from the update source (one UAC
 //                             prompt; Updater.cs).
 //
@@ -60,6 +60,8 @@ namespace TC001MaxWebcam.Cli
             "                             the folder the installed one came from (one administrator prompt)",
             "  update --check             only say whether a newer version is there",
             "  update --now               do not wait for apps to stop streaming from the webcam",
+            "  update --no-remember       with --from: do not keep PATH as the update source",
+            "                             (the tray icon's Update button installs GitHub releases this way)",
             "settings keys:",
             .. SettingsFile.Help.Select(h => "  " + h),
         ];

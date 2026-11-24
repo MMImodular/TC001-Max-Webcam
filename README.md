@@ -207,6 +207,7 @@ settings; click elsewhere or press Esc to close it. It has:
 - colour range, how fast the auto range follows the scene, and units;
 - rotate, and mirror left-right or top-bottom;
 - the automatic shutter, and *Denoise*;
+- updates: the installed version, *Check now*, and *Update* when a newer release is out;
 - *Edit settings file* (for the manual range and the custom palette), *Open log* and *Exit*.
 
 Right-click the icon for a short menu with the same last three. The window follows Windows' light
@@ -238,6 +239,7 @@ TC001MaxWebcam settings reset
 | `auto_shutter` | `on`, `off`. `off` stops the click, but readings drift and fixed-pattern noise grows over time. | `on` |
 | `idle_auto_shutter` | `off`, `on`, `unchanged`: what the shutter is left at when the camera closes | `off` |
 | `denoise` | `true`, `false`: a temporal noise filter that keeps moving edges sharp, removes whole-frame flicker and averages out the error each shutter adds to the fixed pattern | `false` |
+| `update_check` | `true`, `false`: the tray icon looks for a newer release on GitHub once a day | `true` |
 | `overlay` | `true`, `false`: `false` hides every mark and bar below (status badges still show) | `true` |
 | `crosshair` | `true`, `false`: the small x at the centre | `true` |
 | `hotspot` | `true`, `false`: the green + on the hottest pixel, with its temperature | `true` |
@@ -249,7 +251,18 @@ document it.
 
 ## Update and uninstall
 
-- **Update:** download the newer `.msi` from
+- **Update from the tray icon (1.5.0 and later):** once a day the tray icon asks GitHub whether a
+  newer release is out. If one is, Windows shows a notification, and the settings window shows an
+  *Update* button under Updates (the right-click menu also has *Update to ...*). One click:
+  - downloads that release's `.msi` to `%LOCALAPPDATA%\TC001MaxWebcam\updates\`;
+  - checks its size and the SHA-256 checksum GitHub lists for it, and stops if either differs;
+  - hands it to `TC001MaxWebcam update`, which waits until no app is streaming, asks once for
+    administrator rights and upgrades in place (settings stay).
+
+  *Check now* asks at once. To turn the daily check off, switch off *Check for updates daily* or
+  run `TC001MaxWebcam settings set update_check=false`. The check sends nothing but the request
+  itself. Its log is `%LOCALAPPDATA%\TC001MaxWebcam\tray.log`.
+- **Update by hand:** download the newer `.msi` from
   [Releases](https://github.com/MMImodular/TC001-Max-Webcam/releases) and double-click it.
   Or, after a new build or download into the same folder, use *Start menu > Update TC001 Max
   Thermal Webcam*, or run `TC001MaxWebcam update`. It installs the newest `.msi` in the folder the

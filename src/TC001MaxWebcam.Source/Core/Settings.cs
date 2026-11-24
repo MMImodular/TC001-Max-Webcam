@@ -44,6 +44,8 @@
 //                                           table averaging, flicker removal and a motion-adaptive
 //                                           temporal filter; readouts and the range use the result.
 //                                           Default false.
+//   update_check       true | false         the tray icon looks for a newer release on GitHub at most
+//                                           once a day (ReleaseCheck.cs). Default true.
 
 using System;
 using System.Collections.Generic;
@@ -98,6 +100,7 @@ namespace TC001MaxWebcam.Core
         public bool Readouts { get; init; } = true;
         public bool Scale { get; init; } = true;
         public bool Denoise { get; init; }
+        public bool UpdateCheck { get; init; } = true;
 
         public Orientation Orientation => new(Rotate, MirrorHorizontal, MirrorVertical);
 
@@ -140,7 +143,7 @@ namespace TC001MaxWebcam.Core
 
         public static readonly string[] Keys =
             ["rotate", "mirror_horizontal", "mirror_vertical", "units", "palette", "custom_palette", "range", "range_speed", "range_min", "range_max", "auto_shutter", "idle_auto_shutter",
-             "overlay", "crosshair", "hotspot", "readouts", "scale", "denoise"];
+             "overlay", "crosshair", "hotspot", "readouts", "scale", "denoise", "update_check"];
 
         public static readonly string[] Help =
         [
@@ -162,6 +165,7 @@ namespace TC001MaxWebcam.Core
             "readouts=true|false             top bar: MAX / CENTRE",
             "scale=true|false                bottom bar: colour scale, range mode, time",
             "denoise=true|false              noise reduction (temporal filter, flicker, shutter tables)",
+            "update_check=true|false         the tray icon looks for a new release once a day",
         ];
 
         private static readonly JsonDocumentOptions JsonOptions = new()
@@ -266,6 +270,8 @@ namespace TC001MaxWebcam.Core
                     return s with { Scale = Bool("scale", v) };
                 case "denoise":
                     return s with { Denoise = Bool("denoise", v) };
+                case "update_check":
+                    return s with { UpdateCheck = Bool("update_check", v) };
                 default:
                     throw new SettingsException($"unknown setting '{key}' (known: {string.Join(", ", Keys)})");
             }
@@ -457,6 +463,7 @@ namespace TC001MaxWebcam.Core
                 w.WriteBoolean("readouts", s.Readouts);
                 w.WriteBoolean("scale", s.Scale);
                 w.WriteBoolean("denoise", s.Denoise);
+                w.WriteBoolean("update_check", s.UpdateCheck);
                 w.WriteEndObject();
             }
             return Encoding.UTF8.GetString(ms.ToArray()) + "\n";
@@ -569,7 +576,8 @@ namespace TC001MaxWebcam.Core
             (s.Range == RangeMode.Manual ? $" {s.RangeMin.ToString(CultureInfo.InvariantCulture)} .. {s.RangeMax.ToString(CultureInfo.InvariantCulture)}" : "") +
             $", auto shutter {(s.AutoShutter ? "on" : "off")}, idle {SettingsFile.IdleText(s.IdleAutoShutter)}" +
             (s.Overlay ? Hidden(s) : ", overlay off") +
-            (s.Denoise ? ", denoise on" : "");
+            (s.Denoise ? ", denoise on" : "") +
+            (s.UpdateCheck ? "" : ", update check off");
 
         private static string Hidden(WebcamSettings s)
         {
